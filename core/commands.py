@@ -2,9 +2,12 @@ from core.app_launcher import launch_app
 
 from core.system_info import (
     get_cpu,
+    get_cpu_usage,
     get_ram,
+    get_ram_usage,
     get_windows,
     get_gpu,
+    get_gpu_stats,
     get_storage
 )
 
@@ -51,7 +54,16 @@ def execute_command(command):
     if command == "how much storage do i have":
         return f"You have {get_storage()}."
 
+    if command == "what is my cpu usage":
+        return f"Your CPU usage is {get_cpu_usage()}."
 
+
+    if command == "how much ram am i using":
+        return f"You are using {get_ram_usage()}."
+
+
+    if command == "what is my gpu status":
+        return f"GPU status: {get_gpu_stats()}."
     # =========================
     # UNKNOWN COMMAND
     # =========================
