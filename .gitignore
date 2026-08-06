@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Runtime logs
+logs/*.log
+
+# User data
+data/*.json
+
+# OS files
+.DS_Store
+Thumbs.db
