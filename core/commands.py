@@ -1,6 +1,4 @@
-import os
-import subprocess
-import webbrowser
+from core.app_launcher import launch_app
 
 
 def execute_command(command):
@@ -8,23 +6,14 @@ def execute_command(command):
     command = command.lower()
 
 
-    # Open calculator
-    if command == "open calculator":
-        subprocess.Popen("calc.exe")
-        return "Opening calculator."
+    if command.startswith("open "):
+
+        app_name = command[5:].strip()
+
+        result = launch_app(app_name)
+
+        if result:
+            return f"Opening {app_name}."
 
 
-    # Open notepad
-    elif command == "open notepad":
-        subprocess.Popen("notepad.exe")
-        return "Opening notepad."
-
-
-    # Open Chrome/Google
-    elif command in ["open google", "open chrome", "open browser"]:
-        webbrowser.open("https://www.google.com")
-        return "Opening Google."
-
-
-    # Unknown command
     return None
