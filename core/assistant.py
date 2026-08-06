@@ -45,9 +45,9 @@ def start_assistant():
             # Send command to router
             response = process(command)
 
+            print("JARVIS RESPONSE:", response)
 
             if response:
-
                 speak(response)
                 log_info(f"Response: {response}")
 

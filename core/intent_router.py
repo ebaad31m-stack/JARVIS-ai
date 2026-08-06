@@ -1,3 +1,4 @@
+from core.ai_engine import ask_ai
 from core.memory_manager import remember, recall
 from core.commands import execute_command
 from core.responses import get_response
@@ -46,4 +47,4 @@ def process(command):
     if response:
         return response
 
-    return "I'm not sure how to help with that yet."
+    return ask_ai(command)    

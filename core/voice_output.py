@@ -1,13 +1,22 @@
 import pyttsx3
 
 
-engine = pyttsx3.init()
-
-
 def speak(text):
 
     print("JARVIS:", text)
 
-    engine.say(text)
+    try:
+        engine = pyttsx3.init()
 
-    engine.runAndWait()
+        engine.setProperty("rate", 175)
+        engine.setProperty("volume", 1.0)
+
+        engine.say(text)
+
+        engine.runAndWait()
+
+        engine.stop()
+
+    except Exception as error:
+
+        print("Voice error:", error)
