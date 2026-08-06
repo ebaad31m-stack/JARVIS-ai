@@ -10,3 +10,6 @@ pyautogui
 keyboard
 pynput
 markdown
+SpeechRecognition
+pyttsx3
+pyaudio
