@@ -1,0 +1,12 @@
+PySide6
+requests
+python-dotenv
+pillow
+opencv-python
+pytesseract
+beautifulsoup4
+psutil
+pyautogui
+keyboard
+pynput
+markdown
