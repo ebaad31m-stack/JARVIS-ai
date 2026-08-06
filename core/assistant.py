@@ -1,3 +1,4 @@
+from core.voice_input import listen
 from core.memory_manager import remember, recall
 from core.commands import execute_command
 from core.responses import get_response
@@ -10,8 +11,9 @@ def start_assistant():
 
     while True:
 
-        command = input("You: ")
-
+        command = listen()
+        if not command:
+                continue
 
         if command.lower() == "exit":
             speak("JARVIS shutting down.")
