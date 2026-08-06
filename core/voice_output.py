@@ -10,8 +10,6 @@ VOICE_MODEL = r"C:\JARVIS\piper\en_US-ryan-high.onnx"
 
 def speak(text):
 
-    print("JARVIS:", text)
-
     try:
         with tempfile.NamedTemporaryFile(
             suffix=".wav",
@@ -25,7 +23,9 @@ def speak(text):
             "--model",
             VOICE_MODEL,
             "--output_file",
-            output_file
+            output_file,
+            "--length_scale",
+            "0.9"
         ]
 
         process = subprocess.Popen(
@@ -36,13 +36,13 @@ def speak(text):
 
         process.communicate(text)
 
-        # Play audio silently
+        print("JARVIS:", text)
+
         winsound.PlaySound(
             output_file,
             winsound.SND_FILENAME
         )
 
-        # Delete temporary file
         os.remove(output_file)
 
     except Exception as error:
