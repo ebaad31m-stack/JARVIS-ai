@@ -1,11 +1,12 @@
 from core.memory_manager import remember, recall
 from core.commands import execute_command
 from core.responses import get_response
+from core.voice_output import speak
 
 
 def start_assistant():
 
-    print("JARVIS is online.")
+    speak("JARVIS is online.")
 
     while True:
 
@@ -13,18 +14,21 @@ def start_assistant():
 
 
         if command.lower() == "exit":
-            print("JARVIS shutting down.")
+            speak("JARVIS shutting down.")
             break
 
 
-        # Memory system
+        # =========================
+        # MEMORY SYSTEM
+        # =========================
+
         if command.lower().startswith("my name is"):
 
             name = command[10:].strip()
 
             remember("name", name)
 
-            print(f"I'll remember that your name is {name}.")
+            speak(f"I'll remember that your name is {name}.")
             continue
 
 
@@ -33,27 +37,37 @@ def start_assistant():
             name = recall("name")
 
             if name:
-                print(f"Your name is {name}.")
+                speak(f"Your name is {name}.")
             else:
-                print("I don't know your name yet.")
+                speak("I don't know your name yet.")
 
             continue
 
 
-        # Command system
+        # =========================
+        # COMMAND SYSTEM
+        # =========================
+
         response = execute_command(command)
 
         if response:
-            print(response)
+            speak(response)
             continue
 
 
-        # Personality responses
+        # =========================
+        # PERSONALITY SYSTEM
+        # =========================
+
         response = get_response(command)
 
         if response:
-            print(response)
+            speak(response)
             continue
 
 
-        print(f"I received: {command}")
+        # =========================
+        # UNKNOWN COMMAND
+        # =========================
+
+        speak(f"I received: {command}")
