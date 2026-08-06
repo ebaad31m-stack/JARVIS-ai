@@ -8,7 +8,8 @@ from core.system_info import (
     get_windows,
     get_gpu,
     get_gpu_stats,
-    get_storage
+    get_storage,
+    get_system_report
 )
 
 
@@ -64,6 +65,13 @@ def execute_command(command):
 
     if command == "what is my gpu status":
         return f"GPU status: {get_gpu_stats()}."
+
+
+    if command == "system report":
+        return get_system_report()
+
+
+
     # =========================
     # UNKNOWN COMMAND
     # =========================

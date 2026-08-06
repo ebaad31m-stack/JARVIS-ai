@@ -82,3 +82,22 @@ def get_storage():
     total = round(storage.total / (1024 ** 3))
 
     return f"{free}GB free out of {total}GB"
+def get_system_report():
+
+    report = []
+
+    report.append("JARVIS System Report:")
+
+    report.append(f"CPU: {get_cpu()}")
+
+    report.append(f"CPU Usage: {get_cpu_usage()}")
+
+    report.append(f"RAM: {get_ram_usage()}")
+
+    report.append(f"GPU: {get_gpu()}")
+
+    report.append(f"GPU Status: {get_gpu_stats()}")
+
+    report.append(f"Storage: {get_storage()}")
+
+    return "\n".join(report)
