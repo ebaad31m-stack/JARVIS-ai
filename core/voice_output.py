@@ -1,4 +1,11 @@
-import pyttsx3
+import subprocess
+import os
+import tempfile
+import winsound
+
+
+PIPER_PATH = r"C:\JARVIS\piper\piper.exe"
+VOICE_MODEL = r"C:\JARVIS\piper\en_US-ryan-high.onnx"
 
 
 def speak(text):
@@ -6,17 +13,37 @@ def speak(text):
     print("JARVIS:", text)
 
     try:
-        engine = pyttsx3.init()
+        with tempfile.NamedTemporaryFile(
+            suffix=".wav",
+            delete=False
+        ) as audio:
 
-        engine.setProperty("rate", 175)
-        engine.setProperty("volume", 1.0)
+            output_file = audio.name
 
-        engine.say(text)
+        command = [
+            PIPER_PATH,
+            "--model",
+            VOICE_MODEL,
+            "--output_file",
+            output_file
+        ]
 
-        engine.runAndWait()
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            text=True
+        )
 
-        engine.stop()
+        process.communicate(text)
+
+        # Play audio silently
+        winsound.PlaySound(
+            output_file,
+            winsound.SND_FILENAME
+        )
+
+        # Delete temporary file
+        os.remove(output_file)
 
     except Exception as error:
-
         print("Voice error:", error)
