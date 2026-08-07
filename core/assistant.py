@@ -16,37 +16,43 @@ SLEEP_COMMANDS = {
     "jarvis sleep"
 }
 
-
 IDLE_TIMEOUT = 120
 
-
 speaking = False
+stop_requested = False
 
 
 def interrupt_monitor():
-
     global speaking
+    global stop_requested
 
     while speaking:
 
-        if listen_for_stop():
+        try:
+            if listen_for_stop():
 
-            print("Interrupt detected!")
+                print("Interrupt detected!")
 
-            stop_voice()
+                stop_requested = True
 
-            speaking = False
+                stop_voice()
+
+                speaking = False
+
+                break
+
+        except Exception as error:
+
+            print("Interrupt error:", error)
 
             break
 
-
-
 def speak_with_interrupt(text):
-
     global speaking
+    global stop_requested
 
+    stop_requested = False
     speaking = True
-
 
     monitor = threading.Thread(
         target=interrupt_monitor,
@@ -55,81 +61,73 @@ def speak_with_interrupt(text):
 
     monitor.start()
 
+    speech_thread = threading.Thread(
+        target=speak,
+        args=(text,),
+        daemon=True
+    )
 
-    speak(text)
+    speech_thread.start()
 
+    while speech_thread.is_alive():
+        if stop_requested:
+            stop_voice()
+            break
+
+        time.sleep(0.05)
 
     speaking = False
 
+    if stop_requested:
+        stop_voice()
 
 
 def start_assistant():
+    global stop_requested
 
     speak("JARVIS is online.")
 
-
     while True:
-
         print("Waiting for wake word...")
 
         wait_for_wake_word()
 
-
         speak("I'm listening.")
-
 
         last_activity = time.time()
 
-
         while True:
-
             command = listen()
 
-
             if not command:
-
                 if time.time() - last_activity > IDLE_TIMEOUT:
-
-                    speak(
-                        "Going back to sleep."
-                    )
-
+                    speak("Going back to sleep.")
                     break
 
                 continue
-
 
             last_activity = time.time()
 
             command = command.lower().strip()
 
-
             if command == "exit":
-
-                speak(
-                    "JARVIS shutting down."
-                )
-
+                speak("JARVIS shutting down.")
                 return
 
-
             if command in SLEEP_COMMANDS:
-
-                speak(
-                    "Going back to sleep."
-                )
-
+                speak("Going back to sleep.")
                 break
 
+            speak_with_interrupt("One moment, sir.")
 
-            speak_with_interrupt(
-                "Let me think."
-            )
-
+            if stop_requested:
+                stop_requested = False
+                continue
 
             response = process(command)
 
-
             if response:
-
                 speak_with_interrupt(response)
+
+            if stop_requested:
+                stop_requested = False

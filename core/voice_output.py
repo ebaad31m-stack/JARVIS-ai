@@ -1,5 +1,8 @@
+
 import os
 import tempfile
+import time
+import threading
 import pygame
 
 from elevenlabs.client import ElevenLabs
@@ -14,19 +17,43 @@ client = ElevenLabs(
 )
 
 
-pygame.mixer.init()
+pygame.mixer.init(
+    frequency=44100,
+    size=-16,
+    channels=2,
+    buffer=512
+)
+
+
+voice_lock = threading.Lock()
 
 
 def stop_voice():
-    pygame.mixer.music.stop()
+    """Immediately stop JARVIS's voice."""
+
+    try:
+        pygame.mixer.music.stop()
+
+        try:
+            pygame.mixer.music.unload()
+        except Exception:
+            pass
+
+    except Exception as error:
+
+        print("Stop voice error:", error)
 
 
 def speak(text):
+    """Generate and play ElevenLabs speech."""
+
+    output_file = None
 
     try:
 
         print("JARVIS:", text)
 
+        # Generate ElevenLabs audio
         audio = client.text_to_speech.convert(
             voice_id=VOICE_ID,
             text=text,
@@ -34,30 +61,45 @@ def speak(text):
             output_format="mp3_44100_128"
         )
 
-
+        # Save the generated audio
         with tempfile.NamedTemporaryFile(
             suffix=".mp3",
             delete=False
         ) as file:
 
+            output_file = file.name
+
             for chunk in audio:
                 file.write(chunk)
 
-            output_file = file.name
+        # Play the audio
+        with voice_lock:
 
+            pygame.mixer.music.load(output_file)
 
-        pygame.mixer.music.load(output_file)
-        pygame.mixer.music.play()
+            pygame.mixer.music.play()
 
+            while pygame.mixer.music.get_busy():
 
-        while pygame.mixer.music.get_busy():
-            pass
+                time.sleep(0.05)
 
-
-        pygame.mixer.music.unload()
-        os.remove(output_file)
-
+            try:
+                pygame.mixer.music.unload()
+            except Exception:
+                pass
 
     except Exception as error:
 
         print("ElevenLabs voice error:", error)
+
+    finally:
+
+        # Delete temporary MP3
+        if output_file:
+
+            try:
+                os.remove(output_file)
+
+            except OSError:
+                pass
+
