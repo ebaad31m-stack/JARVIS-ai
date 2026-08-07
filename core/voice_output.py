@@ -2,15 +2,32 @@ import subprocess
 import os
 import tempfile
 import winsound
+import threading
 
 
 PIPER_PATH = r"C:\JARVIS\piper\piper.exe"
-
 VOICE_MODEL = r"C:\JARVIS\piper\en_US-lessac-medium.onnx"
+
+
+stop_event = threading.Event()
+
+
+def stop_voice():
+
+    stop_event.set()
+
+    winsound.PlaySound(
+        None,
+        winsound.SND_PURGE
+    )
+
 
 def speak(text):
 
+    stop_event.clear()
+
     try:
+
         with tempfile.NamedTemporaryFile(
             suffix=".wav",
             delete=False
@@ -41,14 +58,18 @@ def speak(text):
 
         print("JARVIS:", text)
 
-        winsound.PlaySound(
-            output_file,
-            winsound.SND_FILENAME
-        )
+
+        if not stop_event.is_set():
+
+            winsound.PlaySound(
+                output_file,
+                winsound.SND_FILENAME
+            )
 
 
         os.remove(output_file)
 
 
     except Exception as error:
+
         print("Voice error:", error)

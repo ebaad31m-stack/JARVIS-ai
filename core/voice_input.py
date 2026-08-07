@@ -12,8 +12,15 @@ def listen():
 
         recognizer.adjust_for_ambient_noise(source, duration=0.5)
 
-        audio = recognizer.listen(source)
+        try:
+            audio = recognizer.listen(
+                source,
+                timeout=5,
+                phrase_time_limit=10
+            )
 
+        except sr.WaitTimeoutError:
+            return ""
 
     try:
 
@@ -23,11 +30,9 @@ def listen():
 
         return command
 
-
     except sr.UnknownValueError:
 
         return ""
-
 
     except sr.RequestError:
 
