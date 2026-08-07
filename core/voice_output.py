@@ -1,75 +1,63 @@
-import subprocess
 import os
 import tempfile
-import winsound
-import threading
+import pygame
+
+from elevenlabs.client import ElevenLabs
+from config import ELEVENLABS_API_KEY
 
 
-PIPER_PATH = r"C:\JARVIS\piper\piper.exe"
-VOICE_MODEL = r"C:\JARVIS\piper\en_US-lessac-medium.onnx"
+VOICE_ID = "nPczCjzI2devNBz1zQrb"
 
 
-stop_event = threading.Event()
+client = ElevenLabs(
+    api_key=ELEVENLABS_API_KEY
+)
+
+
+pygame.mixer.init()
 
 
 def stop_voice():
-
-    stop_event.set()
-
-    winsound.PlaySound(
-        None,
-        winsound.SND_PURGE
-    )
+    pygame.mixer.music.stop()
 
 
 def speak(text):
 
-    stop_event.clear()
-
     try:
-
-        with tempfile.NamedTemporaryFile(
-            suffix=".wav",
-            delete=False
-        ) as audio:
-
-            output_file = audio.name
-
-
-        command = [
-            PIPER_PATH,
-            "--model",
-            VOICE_MODEL,
-            "--output_file",
-            output_file,
-            "--length_scale",
-            "0.9"
-        ]
-
-
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            text=True
-        )
-
-        process.communicate(text)
-
 
         print("JARVIS:", text)
 
+        audio = client.text_to_speech.convert(
+            voice_id=VOICE_ID,
+            text=text,
+            model_id="eleven_flash_v2_5",
+            output_format="mp3_44100_128"
+        )
 
-        if not stop_event.is_set():
 
-            winsound.PlaySound(
-                output_file,
-                winsound.SND_FILENAME
-            )
+        with tempfile.NamedTemporaryFile(
+            suffix=".mp3",
+            delete=False
+        ) as file:
+
+            for chunk in audio:
+                file.write(chunk)
+
+            output_file = file.name
 
 
+        pygame.mixer.music.load(output_file)
+        pygame.mixer.music.play()
+
+
+        while pygame.mixer.music.get_busy():
+            pass
+
+
+        pygame.mixer.music.unload()
         os.remove(output_file)
 
 
     except Exception as error:
 
-        print("Voice error:", error)
+        print("ElevenLabs voice error:", error)
