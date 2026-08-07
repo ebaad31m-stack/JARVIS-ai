@@ -5,8 +5,8 @@ import winsound
 
 
 PIPER_PATH = r"C:\JARVIS\piper\piper.exe"
-VOICE_MODEL = r"C:\JARVIS\piper\en_US-ryan-high.onnx"
 
+VOICE_MODEL = r"C:\JARVIS\piper\en_US-lessac-medium.onnx"
 
 def speak(text):
 
@@ -18,6 +18,7 @@ def speak(text):
 
             output_file = audio.name
 
+
         command = [
             PIPER_PATH,
             "--model",
@@ -28,6 +29,7 @@ def speak(text):
             "0.9"
         ]
 
+
         process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -36,6 +38,7 @@ def speak(text):
 
         process.communicate(text)
 
+
         print("JARVIS:", text)
 
         winsound.PlaySound(
@@ -43,7 +46,9 @@ def speak(text):
             winsound.SND_FILENAME
         )
 
+
         os.remove(output_file)
+
 
     except Exception as error:
         print("Voice error:", error)

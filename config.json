@@ -17,8 +17,10 @@
     },
 
     "voice": {
-        "enabled": true,
-        "wake_word": "jarvis"
+    "enabled": true,
+    "engine": "piper",
+    "model": "en_US-ryan-high.onnx",
+    "speed": 0.9
     },
 
     "system": {
