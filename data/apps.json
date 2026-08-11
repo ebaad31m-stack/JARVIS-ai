@@ -1,7 +1,17 @@
 {
-    "calculator": "calc.exe",
-    "notepad": "notepad.exe",
-    "google": "https://www.google.com",
-    "chrome": "https://www.google.com",
-    "browser": "https://www.google.com"
+    "attack shark": "C:\\Program Files (x86)\\Attack Shark Software\\AttackShark.exe",
+    "brave": "C:\\Users\\Ebaad\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    "breezip": "C:\\Program Files\\WindowsApps\\3138AweZip.AweZip_1.4.47.0_x64__ffd303wmbhcjt\\AweZip\\BreeZip.exe",
+    "chrome": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "claude": "C:\\Users\\Ebaad\\AppData\\Local\\AnthropicClaude\\claude.exe",
+    "crosshair x": "C:\\Program Files\\WindowsApps\\47492CenterpointGaming.ProSight_15.5.1.0_x64__rz8d8f65gztyc\\app\\CrosshairX.exe",
+    "discord": "C:\\Users\\Ebaad\\AppData\\Local\\Discord\\app-1.0.9188\\Discord.exe",
+    "fifa": "C:\\Program Files\\EA Games\\EA SPORTS FC 26\\FC26.exe",
+    "files": "explorer.exe",
+    "fortnite": "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteLauncher.exe",
+    "wallpaper engine": "C:\\Program Files\\Rockstar Games\\Launcher\\Launcher.exe",
+    "settings": "ms-settings:",
+    "spotify": "C:\\Program Files\\WindowsApps\\SpotifyAB.SpotifyMusic_1.295.453.0_x64__zpdnekdrzrea0\\Spotify.exe",
+    "steam": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "minecraft": "C:\\Users\\Ebaad\\AppData\\Roaming\\.minecraft\\TLauncher.exe"
 }
