@@ -1,8 +1,12 @@
 import json
 import os
 
+from core.paths import user_file
 
-AI_SETTINGS_FILE = "data/ai_settings.json"
+
+AI_SETTINGS_FILE = user_file(
+    "ai_settings.json"
+)
 
 DEFAULT_AI_SETTINGS = {
     "normal_model": "qwen2.5:1.5b",
@@ -10,11 +14,14 @@ DEFAULT_AI_SETTINGS = {
     "temperature": 0.7
 }
 
+
 _current_mode = "normal"
 
 
 def load_ai_settings():
-    if not os.path.exists(AI_SETTINGS_FILE):
+    if not os.path.exists(
+        AI_SETTINGS_FILE
+    ):
         return DEFAULT_AI_SETTINGS.copy()
 
     try:
@@ -23,31 +30,47 @@ def load_ai_settings():
             "r",
             encoding="utf-8"
         ) as file:
-            saved = json.load(file)
+            saved = json.load(
+                file
+            )
 
         return {
             "normal_model": saved.get(
                 "normal_model",
-                DEFAULT_AI_SETTINGS["normal_model"]
+                DEFAULT_AI_SETTINGS[
+                    "normal_model"
+                ]
             ),
+
             "think_model": saved.get(
                 "think_model",
-                DEFAULT_AI_SETTINGS["think_model"]
+                DEFAULT_AI_SETTINGS[
+                    "think_model"
+                ]
             ),
+
             "temperature": saved.get(
                 "temperature",
-                DEFAULT_AI_SETTINGS["temperature"]
+                DEFAULT_AI_SETTINGS[
+                    "temperature"
+                ]
             )
         }
 
     except Exception as error:
-        print("AI settings load error:", error)
+        print(
+            "AI settings load error:",
+            error
+        )
+
         return DEFAULT_AI_SETTINGS.copy()
 
 
 def save_ai_settings(settings):
     os.makedirs(
-        "data",
+        os.path.dirname(
+            AI_SETTINGS_FILE
+        ),
         exist_ok=True
     )
 
@@ -70,6 +93,7 @@ def set_ai_mode(mode):
 
     if mode == "think":
         _current_mode = "think"
+
     else:
         _current_mode = "normal"
 
@@ -89,9 +113,13 @@ def get_current_model():
     settings = load_ai_settings()
 
     if _current_mode == "think":
-        return settings["think_model"]
+        return settings[
+            "think_model"
+        ]
 
-    return settings["normal_model"]
+    return settings[
+        "normal_model"
+    ]
 
 
 def get_temperature():
@@ -99,7 +127,9 @@ def get_temperature():
 
     try:
         return float(
-            settings["temperature"]
+            settings[
+                "temperature"
+            ]
         )
 
     except Exception:

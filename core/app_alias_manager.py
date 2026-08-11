@@ -1,139 +1,170 @@
 import json
 import os
+import subprocess
+import webbrowser
 
-DETECTED_FILE = "data/apps_detected.json"
-APP_FILE = "data/apps.json"
+import psutil
+
+from core.paths import user_file
 
 
-def load_json(path):
-    if not os.path.exists(path):
+APP_FILE = user_file(
+    "apps.json"
+)
+
+
+def load_apps():
+    if not os.path.exists(
+        APP_FILE
+    ):
         return {}
 
     try:
-        with open(path, "r", encoding="utf-8") as file:
-            return json.load(file)
+        with open(
+            APP_FILE,
+            "r",
+            encoding="utf-8"
+        ) as file:
+            return json.load(
+                file
+            )
 
     except Exception as error:
-        print(f"Could not load {path}: {error}")
+        print(
+            "App launcher load error:",
+            error
+        )
+
         return {}
 
 
-def save_json(path, data):
-    os.makedirs("data", exist_ok=True)
+def launch_app(name):
+    apps = load_apps()
 
-    with open(path, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+    name = (
+        name
+        .lower()
+        .strip()
+    )
 
+    if name not in apps:
+        return None
 
-def search_apps(search_term):
-    detected = load_json(DETECTED_FILE)
+    target = apps[
+        name
+    ]
 
-    search_term = search_term.lower().strip()
-
-    matches = {}
-
-    for app_name, app_path in detected.items():
-        if search_term in app_name.lower():
-            matches[app_name] = app_path
-
-    return matches
-
-
-def assign_alias(alias, app_name):
-    detected = load_json(DETECTED_FILE)
-    apps = load_json(APP_FILE)
-
-    alias = alias.lower().strip()
-    app_name = app_name.lower().strip()
-
-    if app_name not in detected:
-        return False
-
-    apps[alias] = detected[app_name]
-
-    save_json(APP_FILE, apps)
-
-    return True
-
-
-def list_aliases():
-    return load_json(APP_FILE)
-
-
-def main():
-    print("JARVIS App Alias Manager")
-    print()
-
-    while True:
-        search_term = input(
-            "Search for an app, or type 'exit': "
-        ).strip()
-
-        if search_term.lower() == "exit":
-            break
-
-        matches = search_apps(search_term)
-
-        if not matches:
-            print("No apps found.")
-            print()
-            continue
-
-        match_list = list(matches.items())
-
-        print()
-        print("Matches:")
-        print()
-
-        for index, (name, path) in enumerate(match_list, start=1):
-            print(f"{index}. {name}")
-            print(f"   {path}")
-
-        print()
-
-        choice = input(
-            "Enter the number of the app you want: "
-        ).strip()
-
-        try:
-            choice = int(choice)
-
-            if choice < 1 or choice > len(match_list):
-                print("Invalid choice.")
-                print()
-                continue
-
-        except ValueError:
-            print("Please enter a number.")
-            print()
-            continue
-
-        selected_name, selected_path = match_list[choice - 1]
-
-        print()
-        print(f"Selected: {selected_name}")
-        print(selected_path)
-
-        alias = input(
-            "What should JARVIS call this app? "
-        ).strip()
-
-        if not alias:
-            print("Alias cannot be empty.")
-            print()
-            continue
-
-        if assign_alias(alias, selected_name):
-            print()
-            print(
-                f"Saved alias '{alias}' -> {selected_name}"
+    try:
+        if (
+            target.startswith("http://")
+            or target.startswith("https://")
+        ):
+            webbrowser.open(
+                target
             )
-            print()
+
+        elif target.startswith("ms-"):
+            os.startfile(
+                target
+            )
 
         else:
-            print("Could not save alias.")
-            print()
+            subprocess.Popen(
+                [target]
+            )
+
+        return True
+
+    except Exception as error:
+        print(
+            f"App launcher error for '{name}':",
+            error
+        )
+
+        return False
 
 
-if __name__ == "__main__":
-    main()
+def close_app(name):
+    apps = load_apps()
+
+    name = (
+        name
+        .lower()
+        .strip()
+    )
+
+    if name not in apps:
+        return None
+
+    target = apps[
+        name
+    ]
+
+    if (
+        target.startswith("http://")
+        or target.startswith("https://")
+    ):
+        return False
+
+    if target.startswith("ms-"):
+        return False
+
+    try:
+        process_name = (
+            os.path.basename(
+                target
+            )
+            .lower()
+        )
+
+        found = False
+
+        for process in psutil.process_iter(
+            [
+                "pid",
+                "name",
+                "exe"
+            ]
+        ):
+            try:
+                running_name = (
+                    process.info[
+                        "name"
+                    ]
+                    or ""
+                ).lower()
+
+                running_exe = (
+                    process.info[
+                        "exe"
+                    ]
+                    or ""
+                ).lower()
+
+                target_lower = (
+                    target.lower()
+                )
+
+                if (
+                    running_name == process_name
+                    or running_exe == target_lower
+                ):
+                    process.terminate()
+
+                    found = True
+
+            except (
+                psutil.NoSuchProcess,
+                psutil.AccessDenied
+            ):
+                continue
+
+        return found
+
+    except Exception as error:
+        print(
+            f"App close error for '{name}':",
+            error
+        )
+
+        return False

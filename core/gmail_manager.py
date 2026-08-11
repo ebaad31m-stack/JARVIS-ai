@@ -9,9 +9,21 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from core.paths import (
+    user_file,
+    resource_file
+)
 
-CREDENTIALS_FILE = "data/credentials.json"
-TOKEN_FILE = "data/gmail_token.json"
+
+CREDENTIALS_FILE = resource_file(
+    "data",
+    "credentials.json"
+)
+
+TOKEN_FILE = user_file(
+    "gmail_token.json"
+)
+
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.send"
@@ -21,29 +33,63 @@ SCOPES = [
 def get_gmail_service():
     creds = None
 
-    if os.path.exists(TOKEN_FILE):
+    # =========================
+    # LOAD EXISTING TOKEN
+    # =========================
+
+    if os.path.exists(
+        TOKEN_FILE
+    ):
         try:
             creds = Credentials.from_authorized_user_file(
                 TOKEN_FILE,
                 SCOPES
             )
+
         except Exception as error:
-            print("Gmail token load error:", error)
+            print(
+                "Gmail token load error:",
+                error
+            )
+
+            creds = None
+
+    # =========================
+    # LOGIN / REFRESH TOKEN
+    # =========================
 
     if not creds or not creds.valid:
 
-        if creds and creds.expired and creds.refresh_token:
+        if (
+            creds
+            and creds.expired
+            and creds.refresh_token
+        ):
             try:
-                creds.refresh(Request())
+                creds.refresh(
+                    Request()
+                )
 
             except Exception as error:
-                print("Gmail token refresh error:", error)
+                print(
+                    "Gmail token refresh error:",
+                    error
+                )
+
                 creds = None
 
+        # =========================
+        # NEW LOGIN
+        # =========================
+
         if not creds:
-            if not os.path.exists(CREDENTIALS_FILE):
+
+            if not os.path.exists(
+                CREDENTIALS_FILE
+            ):
                 raise FileNotFoundError(
-                    "Could not find data/credentials.json"
+                    "Could not find Gmail OAuth credentials file:\n"
+                    f"{CREDENTIALS_FILE}"
                 )
 
             flow = InstalledAppFlow.from_client_secrets_file(
@@ -55,8 +101,16 @@ def get_gmail_service():
                 port=0
             )
 
+        # =========================
+        # SAVE USER TOKEN
+        # =========================
+
+        token_folder = os.path.dirname(
+            TOKEN_FILE
+        )
+
         os.makedirs(
-            "data",
+            token_folder,
             exist_ok=True
         )
 
@@ -69,6 +123,10 @@ def get_gmail_service():
                 creds.to_json()
             )
 
+    # =========================
+    # BUILD GMAIL SERVICE
+    # =========================
+
     return build(
         "gmail",
         "v1",
@@ -76,16 +134,27 @@ def get_gmail_service():
     )
 
 
-def send_email(to_email, subject, body):
+def send_email(
+    to_email,
+    subject,
+    body
+):
     try:
         service = get_gmail_service()
 
         message = EmailMessage()
 
-        message["To"] = to_email
-        message["Subject"] = subject
+        message["To"] = (
+            to_email
+        )
 
-        message.set_content(body)
+        message["Subject"] = (
+            subject
+        )
+
+        message.set_content(
+            body
+        )
 
         encoded_message = base64.urlsafe_b64encode(
             message.as_bytes()
@@ -96,7 +165,8 @@ def send_email(to_email, subject, body):
         }
 
         result = (
-            service.users()
+            service
+            .users()
             .messages()
             .send(
                 userId="me",
@@ -113,9 +183,17 @@ def send_email(to_email, subject, body):
         return True
 
     except HttpError as error:
-        print("Gmail API error:", error)
+        print(
+            "Gmail API error:",
+            error
+        )
+
         return False
 
     except Exception as error:
-        print("Gmail error:", error)
+        print(
+            "Gmail error:",
+            error
+        )
+
         return False

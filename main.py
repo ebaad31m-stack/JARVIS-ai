@@ -3,6 +3,7 @@ import threading
 
 from PySide6.QtWidgets import QApplication
 
+from core.paths import initialize_user_data
 from core.assistant import start_assistant
 from gui.main_window import JarvisWindow
 
@@ -12,7 +13,12 @@ def run_assistant():
 
 
 def main():
-    app = QApplication(sys.argv)
+    # Create/migrate user-specific JARVIS data.
+    initialize_user_data()
+
+    app = QApplication(
+        sys.argv
+    )
 
     window = JarvisWindow()
     window.show()
@@ -24,7 +30,9 @@ def main():
 
     assistant_thread.start()
 
-    sys.exit(app.exec())
+    sys.exit(
+        app.exec()
+    )
 
 
 if __name__ == "__main__":
