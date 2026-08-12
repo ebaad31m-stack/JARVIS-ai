@@ -9,12 +9,18 @@ VOICE_SETTINGS_FILE = user_file(
 )
 
 
+BRIAN_VOICE_ID = "nPczCjzI2devNBz1zQrb"
+
+
 DEFAULT_VOICE_SETTINGS = {
     "provider": "piper",
+
+    "piper_voice": "en_US-lessac-medium.onnx",
+
     "elevenlabs_api_key": "",
-    "elevenlabs_voice_id": "nPczCjzI2devNBz1zQrb",
-    "elevenlabs_model": "eleven_flash_v2_5",
-    "piper_voice": "en_US-lessac-medium.onnx"
+    "elevenlabs_voice_name": "Brian",
+    "elevenlabs_voice_id": BRIAN_VOICE_ID,
+    "elevenlabs_model": "eleven_flash_v2_5"
 }
 
 
@@ -33,7 +39,10 @@ def load_voice_settings():
             saved = json.load(file)
 
         settings = DEFAULT_VOICE_SETTINGS.copy()
-        settings.update(saved)
+
+        settings.update(
+            saved
+        )
 
         return settings
 
@@ -55,7 +64,10 @@ def save_voice_settings(settings):
     )
 
     current = DEFAULT_VOICE_SETTINGS.copy()
-    current.update(settings)
+
+    current.update(
+        settings
+    )
 
     with open(
         VOICE_SETTINGS_FILE,
@@ -67,3 +79,9 @@ def save_voice_settings(settings):
             file,
             indent=4
         )
+
+
+def reset_voice_settings():
+    save_voice_settings(
+        DEFAULT_VOICE_SETTINGS.copy()
+    )

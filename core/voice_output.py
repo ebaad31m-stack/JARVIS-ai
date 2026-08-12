@@ -36,6 +36,19 @@ def speak(text):
 
     settings = load_voice_settings()
 
+    speak_with_settings(
+        text,
+        settings
+    )
+
+
+def speak_with_settings(
+    text,
+    settings
+):
+    if not text:
+        return
+
     provider = settings.get(
         "provider",
         "piper"
@@ -53,6 +66,19 @@ def speak(text):
             settings
         )
 
+
+def preview_voice(
+    settings
+):
+    speak_with_settings(
+        "Hello, I am JARVIS.",
+        settings
+    )
+
+
+# =========================================================
+# PIPER
+# =========================================================
 
 def speak_piper(
     text,
@@ -80,6 +106,7 @@ def speak_piper(
             "Piper executable missing:",
             piper_exe
         )
+
         return
 
     if not os.path.exists(
@@ -89,6 +116,7 @@ def speak_piper(
             "Piper voice model missing:",
             voice_model
         )
+
         return
 
     temp_file = tempfile.NamedTemporaryFile(
@@ -97,6 +125,7 @@ def speak_piper(
     )
 
     temp_path = temp_file.name
+
     temp_file.close()
 
     try:
@@ -136,9 +165,14 @@ def speak_piper(
                 os.remove(
                     temp_path
                 )
+
         except Exception:
             pass
 
+
+# =========================================================
+# ELEVENLABS
+# =========================================================
 
 def speak_elevenlabs(
     text,
@@ -151,7 +185,7 @@ def speak_elevenlabs(
 
     voice_id = settings.get(
         "elevenlabs_voice_id",
-        "nPczCjzI2devNBz1zQrb"
+        ""
     ).strip()
 
     model = settings.get(
@@ -163,6 +197,14 @@ def speak_elevenlabs(
         print(
             "ElevenLabs API key is missing."
         )
+
+        return
+
+    if not voice_id:
+        print(
+            "ElevenLabs voice ID is missing."
+        )
+
         return
 
     url = (
@@ -186,6 +228,7 @@ def speak_elevenlabs(
     )
 
     temp_path = temp_file.name
+
     temp_file.close()
 
     try:
@@ -194,8 +237,7 @@ def speak_elevenlabs(
             headers=headers,
             json=payload,
             params={
-                "output_format":
-                "mp3_44100_128"
+                "output_format": "mp3_44100_128"
             },
             timeout=60
         )
@@ -228,29 +270,41 @@ def speak_elevenlabs(
                 os.remove(
                     temp_path
                 )
+
         except Exception:
             pass
 
+
+# =========================================================
+# AUDIO PLAYBACK
+# =========================================================
 
 def play_audio(path):
     with playback_lock:
-        if not pygame.mixer.get_init():
-            pygame.mixer.init()
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
 
-        pygame.mixer.music.load(
-            path
-        )
-
-        pygame.mixer.music.play()
-
-        clock = pygame.time.Clock()
-
-        while pygame.mixer.music.get_busy():
-            clock.tick(
-                30
+            pygame.mixer.music.load(
+                path
             )
 
-        try:
-            pygame.mixer.music.unload()
-        except Exception:
-            pass
+            pygame.mixer.music.play()
+
+            clock = pygame.time.Clock()
+
+            while pygame.mixer.music.get_busy():
+                clock.tick(
+                    30
+                )
+
+            try:
+                pygame.mixer.music.unload()
+            except Exception:
+                pass
+
+        except Exception as error:
+            print(
+                "Audio playback error:",
+                error
+            )

@@ -1,7 +1,6 @@
 import json
 import os
-import subprocess
-import sys
+import threading
 
 from PySide6.QtCore import Qt
 
@@ -27,8 +26,22 @@ from core.ai_mode import (
     save_ai_settings
 )
 
+from core.app_scanner import scan_apps
+
 from core.paths import (
+    resource_file,
     user_file
+)
+
+from core.voice_output import (
+    preview_voice
+)
+
+from core.voice_settings import (
+    BRIAN_VOICE_ID,
+    DEFAULT_VOICE_SETTINGS,
+    load_voice_settings,
+    save_voice_settings
 )
 
 from gui.theme_manager import (
@@ -72,8 +85,8 @@ class SettingsPage(QWidget):
         )
 
         self.resize(
-            950,
-            720
+            980,
+            740
         )
 
         self.alias_inputs = {}
@@ -170,6 +183,7 @@ class SettingsPage(QWidget):
 
         self.apps_tab = QWidget()
         self.ai_tab = QWidget()
+        self.voice_tab = QWidget()
         self.email_tab = QWidget()
         self.appearance_tab = QWidget()
 
@@ -181,6 +195,11 @@ class SettingsPage(QWidget):
         self.tabs.addTab(
             self.ai_tab,
             "AI"
+        )
+
+        self.tabs.addTab(
+            self.voice_tab,
+            "Voice"
         )
 
         self.tabs.addTab(
@@ -199,12 +218,13 @@ class SettingsPage(QWidget):
 
         self.build_apps_tab()
         self.build_ai_tab()
+        self.build_voice_tab()
         self.build_email_tab()
         self.build_appearance_tab()
 
 
     # =========================================================
-    # APPS
+    # APPS TAB
     # =========================================================
 
     def build_apps_tab(self):
@@ -226,48 +246,48 @@ class SettingsPage(QWidget):
             self.search_box
         )
 
-        button_bar = QHBoxLayout()
+        buttons = QHBoxLayout()
 
-        self.refresh_button = QPushButton(
+        refresh_button = QPushButton(
             "Refresh Apps"
         )
 
-        self.rescan_button = QPushButton(
+        rescan_button = QPushButton(
             "Rescan Apps"
         )
 
-        self.save_aliases_button = QPushButton(
+        save_button = QPushButton(
             "Save Aliases"
         )
 
-        self.refresh_button.clicked.connect(
+        refresh_button.clicked.connect(
             self.load_apps
         )
 
-        self.rescan_button.clicked.connect(
+        rescan_button.clicked.connect(
             self.rescan_apps
         )
 
-        self.save_aliases_button.clicked.connect(
+        save_button.clicked.connect(
             self.save_aliases
         )
 
-        button_bar.addWidget(
-            self.refresh_button
+        buttons.addWidget(
+            refresh_button
         )
 
-        button_bar.addWidget(
-            self.rescan_button
+        buttons.addWidget(
+            rescan_button
         )
 
-        button_bar.addStretch()
+        buttons.addStretch()
 
-        button_bar.addWidget(
-            self.save_aliases_button
+        buttons.addWidget(
+            save_button
         )
 
         layout.addLayout(
-            button_bar
+            buttons
         )
 
         headers = QHBoxLayout()
@@ -327,11 +347,8 @@ class SettingsPage(QWidget):
 
     def clear_app_list(self):
         while self.apps_layout.count():
-            item = (
-                self.apps_layout
-                .takeAt(
-                    0
-                )
+            item = self.apps_layout.takeAt(
+                0
             )
 
             widget = item.widget()
@@ -356,17 +373,12 @@ class SettingsPage(QWidget):
 
         reverse_aliases = {
             target: alias
-            for alias, target
-            in aliases.items()
+            for alias, target in aliases.items()
         }
 
-        for (
-            app_name,
-            app_path
-        ) in sorted(
+        for app_name, app_path in sorted(
             detected.items(),
-            key=lambda item:
-            item[0].lower()
+            key=lambda item: item[0].lower()
         ):
             row = QWidget()
 
@@ -486,40 +498,38 @@ class SettingsPage(QWidget):
             QMessageBox.critical(
                 self,
                 "JARVIS",
-                f"Could not save aliases:\n"
-                f"{error}"
+                f"Could not save aliases:\n{error}"
             )
 
 
     def rescan_apps(self):
+        QMessageBox.information(
+            self,
+            "JARVIS",
+            "The app scan will run in the background."
+        )
+
+        thread = threading.Thread(
+            target=self.rescan_apps_worker,
+            daemon=True
+        )
+
+        thread.start()
+
+
+    def rescan_apps_worker(self):
         try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    "core/app_scanner.py"
-                ],
-                check=True
-            )
-
-            self.load_apps()
-
-            QMessageBox.information(
-                self,
-                "JARVIS",
-                "App scan complete."
-            )
+            scan_apps()
 
         except Exception as error:
-            QMessageBox.critical(
-                self,
-                "JARVIS",
-                f"App scan failed:\n"
-                f"{error}"
+            print(
+                "App scan error:",
+                error
             )
 
 
     # =========================================================
-    # AI
+    # AI TAB
     # =========================================================
 
     def build_ai_tab(self):
@@ -548,9 +558,8 @@ class SettingsPage(QWidget):
         )
 
         description = QLabel(
-            "Choose which Ollama model "
-            "JARVIS uses for Normal Mode "
-            "and Think Mode."
+            "Choose the models used by "
+            "Normal Mode and Think Mode."
         )
 
         description.setWordWrap(
@@ -686,25 +695,6 @@ class SettingsPage(QWidget):
             temp_row
         )
 
-        explanation = QLabel(
-            "Lower temperature = more "
-            "focused and predictable.\n"
-            "Higher temperature = more "
-            "creative and varied."
-        )
-
-        explanation.setWordWrap(
-            True
-        )
-
-        layout.addWidget(
-            explanation
-        )
-
-        layout.addSpacing(
-            25
-        )
-
         buttons = QHBoxLayout()
 
         reset_button = QPushButton(
@@ -753,46 +743,29 @@ class SettingsPage(QWidget):
             .strip()
         )
 
-        if (
-            not normal_model
-            or not think_model
-        ):
+        if not normal_model or not think_model:
             QMessageBox.warning(
                 self,
                 "JARVIS",
-                "Both AI model fields must "
-                "contain a model name."
+                "Both model fields are required."
             )
 
             return
 
-        try:
-            save_ai_settings(
-                {
-                    "normal_model":
-                    normal_model,
+        save_ai_settings(
+            {
+                "normal_model": normal_model,
+                "think_model": think_model,
+                "temperature":
+                self.temperature_input.value()
+            }
+        )
 
-                    "think_model":
-                    think_model,
-
-                    "temperature":
-                    self.temperature_input.value()
-                }
-            )
-
-            QMessageBox.information(
-                self,
-                "JARVIS",
-                "AI settings saved."
-            )
-
-        except Exception as error:
-            QMessageBox.critical(
-                self,
-                "JARVIS",
-                f"Could not save AI settings:\n"
-                f"{error}"
-            )
+        QMessageBox.information(
+            self,
+            "JARVIS",
+            "AI settings saved."
+        )
 
 
     def reset_ai_settings(self):
@@ -810,7 +783,555 @@ class SettingsPage(QWidget):
 
 
     # =========================================================
-    # EMAIL
+    # VOICE TAB
+    # =========================================================
+
+    def build_voice_tab(self):
+        layout = QVBoxLayout(
+            self.voice_tab
+        )
+
+        layout.setContentsMargins(
+            30,
+            30,
+            30,
+            30
+        )
+
+        title = QLabel(
+            "Voice"
+        )
+
+        title.setStyleSheet(
+            "font-size: 20px; "
+            "font-weight: bold;"
+        )
+
+        layout.addWidget(
+            title
+        )
+
+        description = QLabel(
+            "Choose between free local Piper speech "
+            "and ElevenLabs speech."
+        )
+
+        description.setWordWrap(
+            True
+        )
+
+        layout.addWidget(
+            description
+        )
+
+        layout.addSpacing(
+            20
+        )
+
+        settings = load_voice_settings()
+
+        # =========================
+        # PROVIDER
+        # =========================
+
+        provider_row = QHBoxLayout()
+
+        provider_row.addWidget(
+            QLabel(
+                "Voice Provider"
+            )
+        )
+
+        provider_row.addStretch()
+
+        self.voice_provider_combo = QComboBox()
+
+        self.voice_provider_combo.addItem(
+            "Piper — Free / Local",
+            "piper"
+        )
+
+        self.voice_provider_combo.addItem(
+            "ElevenLabs",
+            "elevenlabs"
+        )
+
+        provider_index = (
+            self.voice_provider_combo.findData(
+                settings.get(
+                    "provider",
+                    "piper"
+                )
+            )
+        )
+
+        if provider_index >= 0:
+            self.voice_provider_combo.setCurrentIndex(
+                provider_index
+            )
+
+        provider_row.addWidget(
+            self.voice_provider_combo,
+            2
+        )
+
+        layout.addLayout(
+            provider_row
+        )
+
+        layout.addSpacing(
+            15
+        )
+
+        # =========================
+        # PIPER
+        # =========================
+
+        self.piper_label = QLabel(
+            "Piper Voice"
+        )
+
+        self.piper_voice_combo = QComboBox()
+
+        self.load_piper_voices()
+
+        self.piper_voice_combo.setCurrentText(
+            settings.get(
+                "piper_voice",
+                "en_US-lessac-medium.onnx"
+            )
+        )
+
+        layout.addWidget(
+            self.piper_label
+        )
+
+        layout.addWidget(
+            self.piper_voice_combo
+        )
+
+        # =========================
+        # ELEVENLABS
+        # =========================
+
+        self.elevenlabs_voice_label = QLabel(
+            "ElevenLabs Voice"
+        )
+
+        self.elevenlabs_voice_combo = QComboBox()
+
+        self.elevenlabs_voice_combo.addItem(
+            "Brian",
+            BRIAN_VOICE_ID
+        )
+
+        layout.addWidget(
+            self.elevenlabs_voice_label
+        )
+
+        layout.addWidget(
+            self.elevenlabs_voice_combo
+        )
+
+        self.api_key_label = QLabel(
+            "ElevenLabs API Key"
+        )
+
+        self.elevenlabs_api_key_input = QLineEdit()
+
+        self.elevenlabs_api_key_input.setEchoMode(
+            QLineEdit.Password
+        )
+
+        self.elevenlabs_api_key_input.setPlaceholderText(
+            "Enter your ElevenLabs API key"
+        )
+
+        self.elevenlabs_api_key_input.setText(
+            settings.get(
+                "elevenlabs_api_key",
+                ""
+            )
+        )
+
+        layout.addWidget(
+            self.api_key_label
+        )
+
+        layout.addWidget(
+            self.elevenlabs_api_key_input
+        )
+
+        self.custom_voice_label = QLabel(
+            "Voice ID"
+        )
+
+        self.elevenlabs_voice_id_input = QLineEdit()
+
+        self.elevenlabs_voice_id_input.setPlaceholderText(
+            "ElevenLabs voice ID"
+        )
+
+        existing_voice_id = settings.get(
+            "elevenlabs_voice_id",
+            BRIAN_VOICE_ID
+        )
+
+        self.elevenlabs_voice_id_input.setText(
+            existing_voice_id
+        )
+
+        layout.addWidget(
+            self.custom_voice_label
+        )
+
+        layout.addWidget(
+            self.elevenlabs_voice_id_input
+        )
+
+        self.elevenlabs_voice_combo.currentIndexChanged.connect(
+            self.on_elevenlabs_voice_selected
+        )
+
+        self.voice_provider_combo.currentIndexChanged.connect(
+            self.update_voice_controls
+        )
+
+        layout.addSpacing(
+            20
+        )
+
+        # =========================
+        # PREVIEW / SAVE
+        # =========================
+
+        button_row = QHBoxLayout()
+
+        self.preview_voice_button = QPushButton(
+            "▶ Preview Voice"
+        )
+
+        self.save_voice_button = QPushButton(
+            "Save Voice Settings"
+        )
+
+        self.preview_voice_button.clicked.connect(
+            self.preview_selected_voice
+        )
+
+        self.save_voice_button.clicked.connect(
+            self.save_voice_settings_gui
+        )
+
+        button_row.addWidget(
+            self.preview_voice_button
+        )
+
+        button_row.addStretch()
+
+        button_row.addWidget(
+            self.save_voice_button
+        )
+
+        layout.addLayout(
+            button_row
+        )
+
+        preview_description = QLabel(
+            'Preview says: "Hello, I am JARVIS."'
+        )
+
+        preview_description.setAlignment(
+            Qt.AlignCenter
+        )
+
+        layout.addWidget(
+            preview_description
+        )
+
+        layout.addStretch()
+
+        self.update_voice_controls()
+
+
+    def load_piper_voices(self):
+        self.piper_voice_combo.clear()
+
+        piper_folder = resource_file(
+            "piper"
+        )
+
+        voices = []
+
+        if os.path.exists(
+            piper_folder
+        ):
+            try:
+                for filename in os.listdir(
+                    piper_folder
+                ):
+                    if filename.lower().endswith(
+                        ".onnx"
+                    ):
+                        voices.append(
+                            filename
+                        )
+
+            except Exception as error:
+                print(
+                    "Piper voice scan error:",
+                    error
+                )
+
+        if not voices:
+            voices = [
+                "en_US-lessac-medium.onnx"
+            ]
+
+        for voice in sorted(
+            voices
+        ):
+            friendly = (
+                voice
+                .replace(
+                    ".onnx",
+                    ""
+                )
+                .replace(
+                    "_",
+                    " "
+                )
+            )
+
+            self.piper_voice_combo.addItem(
+                friendly,
+                voice
+            )
+
+
+    def update_voice_controls(self):
+        provider = (
+            self.voice_provider_combo
+            .currentData()
+        )
+
+        using_piper = (
+            provider == "piper"
+        )
+
+        using_elevenlabs = (
+            provider == "elevenlabs"
+        )
+
+        self.piper_label.setVisible(
+            using_piper
+        )
+
+        self.piper_voice_combo.setVisible(
+            using_piper
+        )
+
+        self.elevenlabs_voice_label.setVisible(
+            using_elevenlabs
+        )
+
+        self.elevenlabs_voice_combo.setVisible(
+            using_elevenlabs
+        )
+
+        self.api_key_label.setVisible(
+            using_elevenlabs
+        )
+
+        self.elevenlabs_api_key_input.setVisible(
+            using_elevenlabs
+        )
+
+        self.custom_voice_label.setVisible(
+            using_elevenlabs
+        )
+
+        self.elevenlabs_voice_id_input.setVisible(
+            using_elevenlabs
+        )
+
+        if using_elevenlabs:
+            if not self.elevenlabs_voice_id_input.text().strip():
+                self.elevenlabs_voice_combo.setCurrentIndex(
+                    0
+                )
+
+                self.elevenlabs_voice_id_input.setText(
+                    BRIAN_VOICE_ID
+                )
+
+
+    def on_elevenlabs_voice_selected(self):
+        voice_id = (
+            self.elevenlabs_voice_combo
+            .currentData()
+        )
+
+        if voice_id:
+            self.elevenlabs_voice_id_input.setText(
+                voice_id
+            )
+
+
+    def build_current_voice_settings(self):
+        settings = load_voice_settings()
+
+        provider = (
+            self.voice_provider_combo
+            .currentData()
+        )
+
+        settings[
+            "provider"
+        ] = provider
+
+        piper_voice = (
+            self.piper_voice_combo
+            .currentData()
+        )
+
+        if not piper_voice:
+            piper_voice = (
+                self.piper_voice_combo
+                .currentText()
+            )
+
+        settings[
+            "piper_voice"
+        ] = piper_voice
+
+        settings[
+            "elevenlabs_api_key"
+        ] = (
+            self.elevenlabs_api_key_input
+            .text()
+            .strip()
+        )
+
+        settings[
+            "elevenlabs_voice_name"
+        ] = (
+            self.elevenlabs_voice_combo
+            .currentText()
+        )
+
+        settings[
+            "elevenlabs_voice_id"
+        ] = (
+            self.elevenlabs_voice_id_input
+            .text()
+            .strip()
+        )
+
+        if (
+            provider == "elevenlabs"
+            and not settings[
+                "elevenlabs_voice_id"
+            ]
+        ):
+            settings[
+                "elevenlabs_voice_name"
+            ] = "Brian"
+
+            settings[
+                "elevenlabs_voice_id"
+            ] = BRIAN_VOICE_ID
+
+        return settings
+
+
+    def preview_selected_voice(self):
+        settings = (
+            self.build_current_voice_settings()
+        )
+
+        if (
+            settings["provider"]
+            == "elevenlabs"
+            and not settings[
+                "elevenlabs_api_key"
+            ]
+        ):
+            QMessageBox.warning(
+                self,
+                "JARVIS",
+                "Enter your ElevenLabs API key "
+                "before previewing Brian."
+            )
+
+            return
+
+        thread = threading.Thread(
+            target=preview_voice,
+            args=(settings,),
+            daemon=True
+        )
+
+        thread.start()
+
+
+    def save_voice_settings_gui(self):
+        settings = (
+            self.build_current_voice_settings()
+        )
+
+        if (
+            settings[
+                "provider"
+            ]
+            == "elevenlabs"
+        ):
+            if not settings[
+                "elevenlabs_api_key"
+            ]:
+                QMessageBox.warning(
+                    self,
+                    "JARVIS",
+                    "Enter an ElevenLabs API key "
+                    "or choose Piper."
+                )
+
+                return
+
+            if not settings[
+                "elevenlabs_voice_id"
+            ]:
+                settings[
+                    "elevenlabs_voice_name"
+                ] = "Brian"
+
+                settings[
+                    "elevenlabs_voice_id"
+                ] = BRIAN_VOICE_ID
+
+        try:
+            save_voice_settings(
+                settings
+            )
+
+            QMessageBox.information(
+                self,
+                "JARVIS",
+                "Voice settings saved.\n\n"
+                "The new voice will be used "
+                "the next time JARVIS speaks."
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "JARVIS",
+                f"Could not save voice settings:\n{error}"
+            )
+
+
+    # =========================================================
+    # EMAIL TAB
     # =========================================================
 
     def build_email_tab(self):
@@ -825,17 +1346,17 @@ class SettingsPage(QWidget):
             25
         )
 
-        gmail_title = QLabel(
+        title = QLabel(
             "Gmail"
         )
 
-        gmail_title.setStyleSheet(
+        title.setStyleSheet(
             "font-size: 20px; "
             "font-weight: bold;"
         )
 
         layout.addWidget(
-            gmail_title
+            title
         )
 
         gmail_row = QHBoxLayout()
@@ -878,9 +1399,8 @@ class SettingsPage(QWidget):
         )
 
         description = QLabel(
-            "Save contacts so you can "
-            "type a name instead of a "
-            "full email address."
+            "Save contacts so you can type "
+            "a contact name when composing email."
         )
 
         description.setWordWrap(
@@ -929,40 +1449,6 @@ class SettingsPage(QWidget):
 
         layout.addLayout(
             add_row
-        )
-
-        headers = QHBoxLayout()
-
-        name_header = QLabel(
-            "Name"
-        )
-
-        email_header = QLabel(
-            "Email"
-        )
-
-        name_header.setStyleSheet(
-            "font-weight: bold;"
-        )
-
-        email_header.setStyleSheet(
-            "font-weight: bold;"
-        )
-
-        headers.addWidget(
-            name_header,
-            1
-        )
-
-        headers.addWidget(
-            email_header,
-            2
-        )
-
-        headers.addStretch()
-
-        layout.addLayout(
-            headers
         )
 
         self.contacts_scroll = QScrollArea()
@@ -1032,11 +1518,8 @@ class SettingsPage(QWidget):
 
     def clear_contacts(self):
         while self.contacts_layout.count():
-            item = (
-                self.contacts_layout
-                .takeAt(
-                    0
-                )
+            item = self.contacts_layout.takeAt(
+                0
             )
 
             widget = item.widget()
@@ -1054,10 +1537,7 @@ class SettingsPage(QWidget):
             CONTACTS_FILE
         )
 
-        for (
-            name,
-            email
-        ) in sorted(
+        for name, email in sorted(
             contacts.items()
         ):
             self.create_contact_row(
@@ -1119,8 +1599,7 @@ class SettingsPage(QWidget):
         self.contacts_layout.insertWidget(
             max(
                 0,
-                self.contacts_layout.count()
-                - 1
+                self.contacts_layout.count() - 1
             ),
             row
         )
@@ -1148,15 +1627,12 @@ class SettingsPage(QWidget):
             .strip()
         )
 
-        if (
-            not name
-            or not email
-        ):
+        if not name or not email:
             QMessageBox.warning(
                 self,
                 "JARVIS",
-                "Enter both a contact "
-                "name and email."
+                "Enter both a contact name "
+                "and email."
             )
 
             return
@@ -1187,9 +1663,7 @@ class SettingsPage(QWidget):
         for contact in list(
             self.contact_rows
         ):
-            if contact[
-                0
-            ] is row:
+            if contact[0] is row:
                 self.contact_rows.remove(
                     contact
                 )
@@ -1221,22 +1695,15 @@ class SettingsPage(QWidget):
                 .strip()
             )
 
-            if (
-                not name
-                and not email
-            ):
+            if not name and not email:
                 continue
 
-            if (
-                not name
-                or "@" not in email
-            ):
+            if not name or "@" not in email:
                 QMessageBox.warning(
                     self,
                     "JARVIS",
                     "One or more contacts "
-                    "has an invalid name "
-                    "or email."
+                    "has invalid information."
                 )
 
                 return
@@ -1261,13 +1728,12 @@ class SettingsPage(QWidget):
             QMessageBox.critical(
                 self,
                 "JARVIS",
-                f"Could not save contacts:\n"
-                f"{error}"
+                f"Could not save contacts:\n{error}"
             )
 
 
     # =========================================================
-    # APPEARANCE
+    # APPEARANCE TAB
     # =========================================================
 
     def build_appearance_tab(self):
@@ -1296,14 +1762,7 @@ class SettingsPage(QWidget):
         )
 
         description = QLabel(
-            "Change the JARVIS background "
-            "and accent colors. Changes are "
-            "previewed across the main window, "
-            "orb, Help, and Settings."
-        )
-
-        description.setWordWrap(
-            True
+            "Customize the entire JARVIS interface."
         )
 
         layout.addWidget(
@@ -1316,11 +1775,10 @@ class SettingsPage(QWidget):
 
         (
             self.color_1_value,
-            self.color_1_preview,
-            self.color_1_button
+            self.color_1_preview
         ) = self.make_color_row(
             layout,
-            "Color 1 - Background",
+            "Background",
             self.theme[
                 "color_1"
             ],
@@ -1329,19 +1787,14 @@ class SettingsPage(QWidget):
 
         (
             self.color_2_value,
-            self.color_2_preview,
-            self.color_2_button
+            self.color_2_preview
         ) = self.make_color_row(
             layout,
-            "Color 2 - Accent",
+            "Accent",
             self.theme[
                 "color_2"
             ],
             self.choose_color_2
-        )
-
-        layout.addSpacing(
-            30
         )
 
         buttons = QHBoxLayout()
@@ -1437,8 +1890,7 @@ class SettingsPage(QWidget):
 
         return (
             value_label,
-            preview,
-            button
+            preview
         )
 
 
@@ -1459,10 +1911,6 @@ class SettingsPage(QWidget):
             ] = color.name()
 
             self.update_color_previews()
-
-            self.apply_settings_theme(
-                self.theme
-            )
 
             emit_theme_preview(
                 self.theme
@@ -1486,10 +1934,6 @@ class SettingsPage(QWidget):
             ] = color.name()
 
             self.update_color_previews()
-
-            self.apply_settings_theme(
-                self.theme
-            )
 
             emit_theme_preview(
                 self.theme
@@ -1533,56 +1977,23 @@ class SettingsPage(QWidget):
 
 
     def save_theme_clicked(self):
-        try:
-            self.theme = persist_theme(
-                self.theme
-            )
+        self.theme = persist_theme(
+            self.theme
+        )
 
-            QMessageBox.information(
-                self,
-                "JARVIS",
-                "Theme saved and "
-                "applied everywhere."
-            )
-
-        except Exception as error:
-            QMessageBox.critical(
-                self,
-                "JARVIS",
-                f"Could not save theme:\n"
-                f"{error}"
-            )
+        QMessageBox.information(
+            self,
+            "JARVIS",
+            "Theme saved."
+        )
 
 
     def reset_theme(self):
-        self.theme = (
-            DEFAULT_THEME.copy()
-        )
+        self.theme = DEFAULT_THEME.copy()
 
         self.update_color_previews()
 
-        self.apply_settings_theme(
-            self.theme
-        )
-
         emit_theme_preview(
-            self.theme
-        )
-
-
-    def on_theme_changed(
-        self,
-        theme
-    ):
-        self.theme = theme.copy()
-
-        if hasattr(
-            self,
-            "color_1_value"
-        ):
-            self.update_color_previews()
-
-        self.apply_settings_theme(
             self.theme
         )
 
@@ -1606,15 +2017,14 @@ class SettingsPage(QWidget):
                 "r",
                 encoding="utf-8"
             ) as file:
-
                 return json.load(
                     file
                 )
 
         except Exception as error:
             print(
-                f"Settings load error: "
-                f"{error}"
+                "Settings load error:",
+                error
             )
 
             return {}
@@ -1637,7 +2047,6 @@ class SettingsPage(QWidget):
             "w",
             encoding="utf-8"
         ) as file:
-
             json.dump(
                 data,
                 file,
@@ -1648,6 +2057,23 @@ class SettingsPage(QWidget):
     # =========================================================
     # THEME
     # =========================================================
+
+    def on_theme_changed(
+        self,
+        theme
+    ):
+        self.theme = theme.copy()
+
+        if hasattr(
+            self,
+            "color_1_value"
+        ):
+            self.update_color_previews()
+
+        self.apply_settings_theme(
+            self.theme
+        )
+
 
     def apply_settings_theme(
         self,
