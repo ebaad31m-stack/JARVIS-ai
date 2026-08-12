@@ -1,97 +1,149 @@
-import os
 import json
+import os
 
-OUTPUT_FILE = "data/apps_detected.json"
+from core.paths import user_file
+
+
+OUTPUT_FILE = user_file(
+    "apps_detected.json"
+)
+
 
 BUILT_IN_APPS = {
-    "file explorer": "explorer.exe",
-    "settings": "ms-settings:",
-    "calculator": "calc.exe",
-    "notepad": "notepad.exe",
-    "task manager": "taskmgr.exe",
-    "control panel": "control.exe"
+    "File Explorer": "explorer.exe",
+    "Settings": "ms-settings:",
+    "Calculator": "calc.exe",
+    "Notepad": "notepad.exe",
+    "Task Manager": "taskmgr.exe",
+    "Control Panel": "control.exe"
 }
 
 
-SCAN_FOLDERS = [
-    os.path.expandvars(r"%ProgramFiles%"),
-    os.path.expandvars(r"%ProgramFiles(x86)%"),
-    os.path.expandvars(r"%LOCALAPPDATA%"),
-    os.path.expandvars(r"%APPDATA%"),
-]
-
-
-IGNORE_FOLDERS = {
-    "windows",
-    "system32",
-    "winsxs",
-    "packages",
-    "cache",
-    "temp",
-    "logs",
-    "node_modules",
+SKIP_NAMES = {
+    "uninstall.exe",
+    "unins000.exe",
+    "update.exe",
+    "updater.exe"
 }
 
 
-def is_ignored(path):
-    lowered = path.lower()
+def get_scan_roots():
+    roots = []
 
-    for ignored in IGNORE_FOLDERS:
-        if f"\\{ignored}\\" in lowered:
-            return True
+    environment_paths = [
+        os.environ.get(
+            "ProgramFiles"
+        ),
+        os.environ.get(
+            "ProgramFiles(x86)"
+        ),
+        os.environ.get(
+            "LOCALAPPDATA"
+        ),
+        os.environ.get(
+            "APPDATA"
+        )
+    ]
 
-    return False
+    for path in environment_paths:
+        if (
+            path
+            and os.path.exists(path)
+            and path not in roots
+        ):
+            roots.append(
+                path
+            )
+
+    return roots
 
 
 def scan_apps():
-    detected = {}
+    detected = BUILT_IN_APPS.copy()
 
-    for base_folder in SCAN_FOLDERS:
+    for root in get_scan_roots():
+        print(
+            "Scanning:",
+            root
+        )
 
-        if not base_folder or not os.path.exists(base_folder):
-            continue
+        try:
+            for current_root, dirs, files in os.walk(
+                root
+            ):
+                for filename in files:
+                    if not filename.lower().endswith(
+                        ".exe"
+                    ):
+                        continue
 
-        print(f"Scanning: {base_folder}")
+                    if filename.lower() in SKIP_NAMES:
+                        continue
 
-        for root, dirs, files in os.walk(base_folder):
+                    full_path = os.path.join(
+                        current_root,
+                        filename
+                    )
 
-            if is_ignored(root):
-                dirs[:] = []
-                continue
+                    friendly_name = os.path.splitext(
+                        filename
+                    )[0]
 
-            for file in files:
+                    key = friendly_name
 
-                if not file.lower().endswith(".exe"):
-                    continue
+                    number = 2
 
-                full_path = os.path.join(root, file)
+                    while (
+                        key in detected
+                        and detected[key] != full_path
+                    ):
+                        key = (
+                            f"{friendly_name} "
+                            f"({number})"
+                        )
 
-                app_name = os.path.splitext(file)[0].lower()
+                        number += 1
 
-                if app_name not in detected:
-                    detected[app_name] = full_path
+                    detected[
+                        key
+                    ] = full_path
 
-    for name, target in BUILT_IN_APPS.items():
-        detected[name] = target
+        except Exception as error:
+            print(
+                "App scan error:",
+                root,
+                error
+            )
+
+    os.makedirs(
+        os.path.dirname(
+            OUTPUT_FILE
+        ),
+        exist_ok=True
+    )
+
+    with open(
+        OUTPUT_FILE,
+        "w",
+        encoding="utf-8"
+    ) as file:
+        json.dump(
+            detected,
+            file,
+            indent=4
+        )
+
+    print(
+        f"Saved {len(detected)} "
+        f"detected apps to:"
+    )
+
+    print(
+        OUTPUT_FILE
+    )
 
     return detected
 
 
-def save_detected_apps(apps):
-    os.makedirs("data", exist_ok=True)
-
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as file:
-        json.dump(apps, file, indent=4)
-
-    print()
-    print(f"Saved {len(apps)} detected apps to:")
-    print(OUTPUT_FILE)
-
-
-def main():
-    apps = scan_apps()
-    save_detected_apps(apps)
-
-
 if __name__ == "__main__":
-    main()
+    scan_apps()

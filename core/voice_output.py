@@ -1,87 +1,22 @@
-
 import os
+import subprocess
 import tempfile
-import time
 import threading
+
 import pygame
+import requests
 
-from elevenlabs.client import ElevenLabs
-from config import ELEVENLABS_API_KEY
-
-
-VOICE_ID = "nPczCjzI2devNBz1zQrb"
+from core.paths import resource_file
+from core.voice_settings import load_voice_settings
 
 
-client = ElevenLabs(
-    api_key=ELEVENLABS_API_KEY
-)
-
-
-pygame.mixer.init(
-    frequency=44100,
-    size=-16,
-    channels=2,
-    buffer=512
-)
-
-
-voice_lock = threading.Lock()
+playback_lock = threading.Lock()
 
 
 def stop_voice():
-    """Immediately stop JARVIS's voice."""
-
     try:
-        pygame.mixer.music.stop()
-
-        try:
-            pygame.mixer.music.unload()
-        except Exception:
-            pass
-
-    except Exception as error:
-
-        print("Stop voice error:", error)
-
-
-def speak(text):
-    """Generate and play ElevenLabs speech."""
-
-    output_file = None
-
-    try:
-
-        print("JARVIS:", text)
-
-        # Generate ElevenLabs audio
-        audio = client.text_to_speech.convert(
-            voice_id=VOICE_ID,
-            text=text,
-            model_id="eleven_flash_v2_5",
-            output_format="mp3_44100_128"
-        )
-
-        # Save the generated audio
-        with tempfile.NamedTemporaryFile(
-            suffix=".mp3",
-            delete=False
-        ) as file:
-
-            output_file = file.name
-
-            for chunk in audio:
-                file.write(chunk)
-
-        # Play the audio
-        with voice_lock:
-
-            pygame.mixer.music.load(output_file)
-
-            pygame.mixer.music.play()
-
-            while pygame.mixer.music.get_busy():
-
-                time.sleep(0.05)
+        if pygame.mixer.get_init():
+            pygame.mixer.music.stop()
 
             try:
                 pygame.mixer.music.unload()
@@ -89,17 +24,233 @@ def speak(text):
                 pass
 
     except Exception as error:
+        print(
+            "Voice stop error:",
+            error
+        )
 
-        print("ElevenLabs voice error:", error)
+
+def speak(text):
+    if not text:
+        return
+
+    settings = load_voice_settings()
+
+    provider = settings.get(
+        "provider",
+        "piper"
+    )
+
+    if provider == "elevenlabs":
+        speak_elevenlabs(
+            text,
+            settings
+        )
+
+    else:
+        speak_piper(
+            text,
+            settings
+        )
+
+
+def speak_piper(
+    text,
+    settings
+):
+    piper_exe = resource_file(
+        "piper",
+        "piper.exe"
+    )
+
+    voice_name = settings.get(
+        "piper_voice",
+        "en_US-lessac-medium.onnx"
+    )
+
+    voice_model = resource_file(
+        "piper",
+        voice_name
+    )
+
+    if not os.path.exists(
+        piper_exe
+    ):
+        print(
+            "Piper executable missing:",
+            piper_exe
+        )
+        return
+
+    if not os.path.exists(
+        voice_model
+    ):
+        print(
+            "Piper voice model missing:",
+            voice_model
+        )
+        return
+
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".wav"
+    )
+
+    temp_path = temp_file.name
+    temp_file.close()
+
+    try:
+        subprocess.run(
+            [
+                piper_exe,
+                "--model",
+                voice_model,
+                "--output_file",
+                temp_path
+            ],
+            input=text,
+            text=True,
+            check=True,
+            creationflags=(
+                subprocess.CREATE_NO_WINDOW
+                if os.name == "nt"
+                else 0
+            )
+        )
+
+        play_audio(
+            temp_path
+        )
+
+    except Exception as error:
+        print(
+            "Piper voice error:",
+            error
+        )
 
     finally:
+        try:
+            if os.path.exists(
+                temp_path
+            ):
+                os.remove(
+                    temp_path
+                )
+        except Exception:
+            pass
 
-        # Delete temporary MP3
-        if output_file:
 
-            try:
-                os.remove(output_file)
+def speak_elevenlabs(
+    text,
+    settings
+):
+    api_key = settings.get(
+        "elevenlabs_api_key",
+        ""
+    ).strip()
 
-            except OSError:
-                pass
+    voice_id = settings.get(
+        "elevenlabs_voice_id",
+        "nPczCjzI2devNBz1zQrb"
+    ).strip()
 
+    model = settings.get(
+        "elevenlabs_model",
+        "eleven_flash_v2_5"
+    ).strip()
+
+    if not api_key:
+        print(
+            "ElevenLabs API key is missing."
+        )
+        return
+
+    url = (
+        "https://api.elevenlabs.io/v1/"
+        f"text-to-speech/{voice_id}"
+    )
+
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "text": text,
+        "model_id": model
+    }
+
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".mp3"
+    )
+
+    temp_path = temp_file.name
+    temp_file.close()
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            params={
+                "output_format":
+                "mp3_44100_128"
+            },
+            timeout=60
+        )
+
+        response.raise_for_status()
+
+        with open(
+            temp_path,
+            "wb"
+        ) as file:
+            file.write(
+                response.content
+            )
+
+        play_audio(
+            temp_path
+        )
+
+    except Exception as error:
+        print(
+            "ElevenLabs voice error:",
+            error
+        )
+
+    finally:
+        try:
+            if os.path.exists(
+                temp_path
+            ):
+                os.remove(
+                    temp_path
+                )
+        except Exception:
+            pass
+
+
+def play_audio(path):
+    with playback_lock:
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+
+        pygame.mixer.music.load(
+            path
+        )
+
+        pygame.mixer.music.play()
+
+        clock = pygame.time.Clock()
+
+        while pygame.mixer.music.get_busy():
+            clock.tick(
+                30
+            )
+
+        try:
+            pygame.mixer.music.unload()
+        except Exception:
+            pass
