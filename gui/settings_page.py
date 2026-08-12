@@ -2,7 +2,11 @@ import json
 import os
 import threading
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import (
+    QObject,
+    Qt,
+    Signal
+)
 
 from PySide6.QtGui import QColor
 
@@ -28,18 +32,22 @@ from core.ai_mode import (
 
 from core.app_scanner import scan_apps
 
+from core.gmail_manager import get_gmail_service
+
 from core.paths import (
     resource_file,
     user_file
 )
 
-from core.voice_output import (
-    preview_voice
+from core.ui_blocker import (
+    block_wake,
+    unblock_wake
 )
+
+from core.voice_output import preview_voice
 
 from core.voice_settings import (
     BRIAN_VOICE_ID,
-    DEFAULT_VOICE_SETTINGS,
     load_voice_settings,
     save_voice_settings
 )
@@ -70,6 +78,11 @@ GMAIL_TOKEN_FILE = user_file(
 )
 
 
+class SettingsSignals(QObject):
+    gmail_finished = Signal(bool, str)
+    apps_finished = Signal(bool, int, str)
+
+
 class SettingsPage(QWidget):
 
     def __init__(
@@ -95,6 +108,16 @@ class SettingsPage(QWidget):
 
         self.theme = load_theme()
 
+        self.signals = SettingsSignals()
+
+        self.signals.gmail_finished.connect(
+            self.gmail_connection_finished
+        )
+
+        self.signals.apps_finished.connect(
+            self.app_scan_finished
+        )
+
         self.build_ui()
 
         self.apply_settings_theme(
@@ -104,6 +127,34 @@ class SettingsPage(QWidget):
         theme_bus.theme_changed.connect(
             self.on_theme_changed
         )
+
+
+    # =========================================================
+    # WAKE WORD BLOCKING
+    # =========================================================
+
+    def showEvent(
+        self,
+        event
+    ):
+        block_wake(
+            "settings"
+        )
+
+        super().showEvent(
+            event
+        )
+
+
+    def closeEvent(
+        self,
+        event
+    ):
+        unblock_wake(
+            "settings"
+        )
+
+        event.accept()
 
 
     # =========================================================
@@ -121,6 +172,10 @@ class SettingsPage(QWidget):
             20,
             20
         )
+
+        # =========================
+        # HEADER
+        # =========================
 
         top_bar = QHBoxLayout()
 
@@ -252,7 +307,7 @@ class SettingsPage(QWidget):
             "Refresh Apps"
         )
 
-        rescan_button = QPushButton(
+        self.rescan_button = QPushButton(
             "Rescan Apps"
         )
 
@@ -264,7 +319,7 @@ class SettingsPage(QWidget):
             self.load_apps
         )
 
-        rescan_button.clicked.connect(
+        self.rescan_button.clicked.connect(
             self.rescan_apps
         )
 
@@ -277,7 +332,7 @@ class SettingsPage(QWidget):
         )
 
         buttons.addWidget(
-            rescan_button
+            self.rescan_button
         )
 
         buttons.addStretch()
@@ -342,6 +397,14 @@ class SettingsPage(QWidget):
             self.apps_scroll
         )
 
+        self.app_scan_status = QLabel(
+            ""
+        )
+
+        layout.addWidget(
+            self.app_scan_status
+        )
+
         self.load_apps()
 
 
@@ -373,7 +436,8 @@ class SettingsPage(QWidget):
 
         reverse_aliases = {
             target: alias
-            for alias, target in aliases.items()
+            for alias, target
+            in aliases.items()
         }
 
         for app_name, app_path in sorted(
@@ -503,10 +567,12 @@ class SettingsPage(QWidget):
 
 
     def rescan_apps(self):
-        QMessageBox.information(
-            self,
-            "JARVIS",
-            "The app scan will run in the background."
+        self.rescan_button.setEnabled(
+            False
+        )
+
+        self.app_scan_status.setText(
+            "Scanning installed applications..."
         )
 
         thread = threading.Thread(
@@ -519,12 +585,48 @@ class SettingsPage(QWidget):
 
     def rescan_apps_worker(self):
         try:
-            scan_apps()
+            apps = scan_apps()
+
+            self.signals.apps_finished.emit(
+                True,
+                len(apps),
+                ""
+            )
 
         except Exception as error:
-            print(
-                "App scan error:",
-                error
+            self.signals.apps_finished.emit(
+                False,
+                0,
+                str(error)
+            )
+
+
+    def app_scan_finished(
+        self,
+        success,
+        count,
+        error
+    ):
+        self.rescan_button.setEnabled(
+            True
+        )
+
+        if success:
+            self.app_scan_status.setText(
+                f"✓ Found {count} applications."
+            )
+
+            self.load_apps()
+
+        else:
+            self.app_scan_status.setText(
+                "✗ App scan failed."
+            )
+
+            QMessageBox.warning(
+                self,
+                "JARVIS",
+                f"App scan failed:\n{error}"
             )
 
 
@@ -576,6 +678,10 @@ class SettingsPage(QWidget):
 
         settings = load_ai_settings()
 
+        # =========================
+        # NORMAL MODEL
+        # =========================
+
         normal_row = QHBoxLayout()
 
         normal_row.addWidget(
@@ -615,6 +721,10 @@ class SettingsPage(QWidget):
             normal_row
         )
 
+        # =========================
+        # THINK MODEL
+        # =========================
+
         think_row = QHBoxLayout()
 
         think_row.addWidget(
@@ -653,6 +763,10 @@ class SettingsPage(QWidget):
         layout.addLayout(
             think_row
         )
+
+        # =========================
+        # TEMPERATURE
+        # =========================
 
         temp_row = QHBoxLayout()
 
@@ -694,6 +808,10 @@ class SettingsPage(QWidget):
         layout.addLayout(
             temp_row
         )
+
+        # =========================
+        # BUTTONS
+        # =========================
 
         buttons = QHBoxLayout()
 
@@ -757,7 +875,7 @@ class SettingsPage(QWidget):
                 "normal_model": normal_model,
                 "think_model": think_model,
                 "temperature":
-                self.temperature_input.value()
+                    self.temperature_input.value()
             }
         )
 
@@ -895,12 +1013,21 @@ class SettingsPage(QWidget):
 
         self.load_piper_voices()
 
-        self.piper_voice_combo.setCurrentText(
-            settings.get(
-                "piper_voice",
-                "en_US-lessac-medium.onnx"
+        saved_piper = settings.get(
+            "piper_voice",
+            "en_US-lessac-medium.onnx"
+        )
+
+        piper_index = (
+            self.piper_voice_combo.findData(
+                saved_piper
             )
         )
+
+        if piper_index >= 0:
+            self.piper_voice_combo.setCurrentIndex(
+                piper_index
+            )
 
         layout.addWidget(
             self.piper_label
@@ -962,27 +1089,21 @@ class SettingsPage(QWidget):
             self.elevenlabs_api_key_input
         )
 
-        self.custom_voice_label = QLabel(
+        self.voice_id_label = QLabel(
             "Voice ID"
         )
 
         self.elevenlabs_voice_id_input = QLineEdit()
 
-        self.elevenlabs_voice_id_input.setPlaceholderText(
-            "ElevenLabs voice ID"
-        )
-
-        existing_voice_id = settings.get(
-            "elevenlabs_voice_id",
-            BRIAN_VOICE_ID
-        )
-
         self.elevenlabs_voice_id_input.setText(
-            existing_voice_id
+            settings.get(
+                "elevenlabs_voice_id",
+                BRIAN_VOICE_ID
+            )
         )
 
         layout.addWidget(
-            self.custom_voice_label
+            self.voice_id_label
         )
 
         layout.addWidget(
@@ -1037,16 +1158,16 @@ class SettingsPage(QWidget):
             button_row
         )
 
-        preview_description = QLabel(
-            'Preview says: "Hello, I am JARVIS."'
+        preview_text = QLabel(
+            'Preview: "Hello, I am JARVIS."'
         )
 
-        preview_description.setAlignment(
+        preview_text.setAlignment(
             Qt.AlignCenter
         )
 
         layout.addWidget(
-            preview_description
+            preview_text
         )
 
         layout.addStretch()
@@ -1147,7 +1268,7 @@ class SettingsPage(QWidget):
             using_elevenlabs
         )
 
-        self.custom_voice_label.setVisible(
+        self.voice_id_label.setVisible(
             using_elevenlabs
         )
 
@@ -1156,7 +1277,11 @@ class SettingsPage(QWidget):
         )
 
         if using_elevenlabs:
-            if not self.elevenlabs_voice_id_input.text().strip():
+            if not (
+                self.elevenlabs_voice_id_input
+                .text()
+                .strip()
+            ):
                 self.elevenlabs_voice_combo.setCurrentIndex(
                     0
                 )
@@ -1317,9 +1442,7 @@ class SettingsPage(QWidget):
             QMessageBox.information(
                 self,
                 "JARVIS",
-                "Voice settings saved.\n\n"
-                "The new voice will be used "
-                "the next time JARVIS speaks."
+                "Voice settings saved."
             )
 
         except Exception as error:
@@ -1346,6 +1469,10 @@ class SettingsPage(QWidget):
             25
         )
 
+        # =========================
+        # GMAIL
+        # =========================
+
         title = QLabel(
             "Gmail"
         )
@@ -1357,6 +1484,19 @@ class SettingsPage(QWidget):
 
         layout.addWidget(
             title
+        )
+
+        description = QLabel(
+            "Connect Gmail so JARVIS can send "
+            "emails using your account."
+        )
+
+        description.setWordWrap(
+            True
+        )
+
+        layout.addWidget(
+            description
         )
 
         gmail_row = QHBoxLayout()
@@ -1375,6 +1515,18 @@ class SettingsPage(QWidget):
 
         gmail_row.addStretch()
 
+        self.gmail_connect_button = QPushButton(
+            "Connect Gmail"
+        )
+
+        self.gmail_connect_button.clicked.connect(
+            self.connect_gmail
+        )
+
+        gmail_row.addWidget(
+            self.gmail_connect_button
+        )
+
         layout.addLayout(
             gmail_row
         )
@@ -1384,6 +1536,10 @@ class SettingsPage(QWidget):
         layout.addSpacing(
             25
         )
+
+        # =========================
+        # CONTACTS
+        # =========================
 
         contacts_title = QLabel(
             "Contacts"
@@ -1398,17 +1554,17 @@ class SettingsPage(QWidget):
             contacts_title
         )
 
-        description = QLabel(
-            "Save contacts so you can type "
-            "a contact name when composing email."
+        contacts_description = QLabel(
+            "Save contacts so JARVIS can resolve "
+            "names when composing emails."
         )
 
-        description.setWordWrap(
+        contacts_description.setWordWrap(
             True
         )
 
         layout.addWidget(
-            description
+            contacts_description
         )
 
         add_row = QHBoxLayout()
@@ -1507,14 +1663,91 @@ class SettingsPage(QWidget):
 
 
     def update_gmail_status(self):
-        self.gmail_status.setText(
-            "Configured ✓"
-            if os.path.exists(
-                GMAIL_TOKEN_FILE
-            )
-            else "Not configured"
+        connected = os.path.exists(
+            GMAIL_TOKEN_FILE
         )
 
+        self.gmail_status.setText(
+            "Connected ✓"
+            if connected
+            else "Not connected"
+        )
+
+        self.gmail_connect_button.setText(
+            "Reconnect Gmail"
+            if connected
+            else "Connect Gmail"
+        )
+
+
+    def connect_gmail(self):
+        self.gmail_connect_button.setEnabled(
+            False
+        )
+
+        self.gmail_status.setText(
+            "Connecting..."
+        )
+
+        thread = threading.Thread(
+            target=self.connect_gmail_worker,
+            daemon=True
+        )
+
+        thread.start()
+
+
+    def connect_gmail_worker(self):
+        try:
+            get_gmail_service()
+
+            self.signals.gmail_finished.emit(
+                True,
+                ""
+            )
+
+        except Exception as error:
+            print(
+                "Gmail connection error:",
+                error
+            )
+
+            self.signals.gmail_finished.emit(
+                False,
+                str(error)
+            )
+
+
+    def gmail_connection_finished(
+        self,
+        success,
+        error
+    ):
+        self.gmail_connect_button.setEnabled(
+            True
+        )
+
+        self.update_gmail_status()
+
+        if success:
+            QMessageBox.information(
+                self,
+                "JARVIS",
+                "Gmail connected successfully."
+            )
+
+        else:
+            QMessageBox.warning(
+                self,
+                "JARVIS",
+                "Gmail connection failed.\n\n"
+                f"{error}"
+            )
+
+
+    # =========================================================
+    # CONTACTS
+    # =========================================================
 
     def clear_contacts(self):
         while self.contacts_layout.count():
@@ -1698,7 +1931,10 @@ class SettingsPage(QWidget):
             if not name and not email:
                 continue
 
-            if not name or "@" not in email:
+            if (
+                not name
+                or "@" not in email
+            ):
                 QMessageBox.warning(
                     self,
                     "JARVIS",
@@ -1999,7 +2235,7 @@ class SettingsPage(QWidget):
 
 
     # =========================================================
-    # JSON
+    # JSON HELPERS
     # =========================================================
 
     def load_json(
@@ -2120,6 +2356,11 @@ class SettingsPage(QWidget):
             QPushButton:hover {{
                 background-color: {accent};
                 color: {background};
+            }}
+
+            QPushButton:disabled {{
+                color: gray;
+                border-color: gray;
             }}
 
             QTabWidget::pane {{

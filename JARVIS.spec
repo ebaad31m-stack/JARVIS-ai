@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('piper', 'piper'), ('data/credentials.json', 'data')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('openwakeword')

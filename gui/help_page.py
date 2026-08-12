@@ -1,5 +1,8 @@
 from PySide6.QtCore import Qt
-
+from core.ui_blocker import (
+    block_wake,
+    unblock_wake
+)
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -49,6 +52,47 @@ class HelpPage(QWidget):
         theme_bus.theme_changed.connect(
             self.on_theme_changed
         )
+
+
+    # =========================================================
+    # WAKE WORD BLOCKING
+    # =========================================================
+
+    def showEvent(
+        self,
+        event
+    ):
+        block_wake(
+            "help"
+        )
+
+        super().showEvent(
+            event
+        )
+
+
+    def hideEvent(
+        self,
+        event
+    ):
+        unblock_wake(
+            "help"
+        )
+
+        super().hideEvent(
+            event
+        )
+
+
+    def closeEvent(
+        self,
+        event
+    ):
+        unblock_wake(
+            "help"
+        )
+
+        event.accept()
 
 
     # =========================================================

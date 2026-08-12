@@ -44,6 +44,10 @@ from core.ui_state import (
     set_state
 )
 
+from core.ui_blocker import (
+    wake_is_blocked
+)
+
 from core.voice_input import (
     listen,
     listen_for_stop
@@ -564,11 +568,26 @@ def start_assistant():
             "IDLE"
         )
 
+        while wake_is_blocked():
+            time.sleep(
+                0.1
+            )
+
         print(
             "Waiting for wake word..."
         )
 
         wait_for_wake_word()
+
+        # Settings or Help may have opened while the wake-word
+        # listener was already running. If so, ignore that wake
+        # and return to IDLE instead of activating JARVIS.
+        if wake_is_blocked():
+            set_state(
+                "IDLE"
+            )
+
+            continue
 
         set_state(
             "SPEAKING"
