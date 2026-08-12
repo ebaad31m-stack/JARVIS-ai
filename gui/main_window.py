@@ -1,29 +1,50 @@
 import sys
 
-from gui.jarvis_orb import JarvisOrb
-from gui.settings_page import SettingsPage
-from gui.help_page import HelpPage
-from gui.theme_manager import load_theme
+from PySide6.QtCore import (
+    Qt,
+    QTimer
+)
 
-from core.ai_mode import get_ai_mode_label
+from PySide6.QtGui import (
+    QFont
+)
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QVBoxLayout,
+    QWidget
+)
+
+from core.ai_mode import (
+    get_ai_mode_label
+)
 
 from core.ui_state import (
     get_state,
-    ui_state,
-    submit_text_input
+    submit_text_input,
+    ui_state
 )
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QLabel,
-    QPushButton,
-    QVBoxLayout,
-    QHBoxLayout,
-    QInputDialog
+from gui.help_page import (
+    HelpPage
+)
+
+from gui.jarvis_orb import (
+    JarvisOrb
+)
+
+from gui.settings_page import (
+    SettingsPage
+)
+
+from gui.theme_manager import (
+    load_theme,
+    theme_bus
 )
 
 
@@ -32,8 +53,14 @@ class JarvisWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("JARVIS")
-        self.resize(1100, 700)
+        self.setWindowTitle(
+            "JARVIS"
+        )
+
+        self.resize(
+            1100,
+            700
+        )
 
         self.settings_window = None
         self.help_window = None
@@ -41,31 +68,26 @@ class JarvisWindow(QMainWindow):
         self.theme = load_theme()
 
         self.build_ui()
-        self.apply_theme()
+
+        self.apply_theme(
+            self.theme
+        )
 
         # =========================
         # STATE TIMER
         # =========================
 
-        self.state_timer = QTimer(self)
+        self.state_timer = QTimer(
+            self
+        )
 
         self.state_timer.timeout.connect(
             self.update_jarvis_state
         )
 
-        self.state_timer.start(100)
-
-        # =========================
-        # THEME TIMER
-        # =========================
-
-        self.theme_timer = QTimer(self)
-
-        self.theme_timer.timeout.connect(
-            self.check_theme
+        self.state_timer.start(
+            100
         )
-
-        self.theme_timer.start(500)
 
         # =========================
         # SHUTDOWN SIGNAL
@@ -83,13 +105,20 @@ class JarvisWindow(QMainWindow):
             self.request_text_input
         )
 
+        # =========================
+        # THEME SIGNAL
+        # =========================
 
-    # =========================
+        theme_bus.theme_changed.connect(
+            self.on_theme_changed
+        )
+
+
+    # =========================================================
     # BUILD UI
-    # =========================
+    # =========================================================
 
     def build_ui(self):
-
         central_widget = QWidget()
 
         self.setCentralWidget(
@@ -113,7 +142,9 @@ class JarvisWindow(QMainWindow):
 
         top_bar = QHBoxLayout()
 
-        self.help_button = QPushButton("?")
+        self.help_button = QPushButton(
+            "?"
+        )
 
         self.help_button.setFixedSize(
             42,
@@ -128,7 +159,9 @@ class JarvisWindow(QMainWindow):
             self.open_help
         )
 
-        self.settings_button = QPushButton("⚙")
+        self.settings_button = QPushButton(
+            "⚙"
+        )
 
         self.settings_button.setFixedSize(
             42,
@@ -162,7 +195,7 @@ class JarvisWindow(QMainWindow):
         main_layout.addStretch()
 
         # =========================
-        # AI MODE
+        # AI MODE LABEL
         # =========================
 
         self.mode_label = QLabel(
@@ -174,8 +207,14 @@ class JarvisWindow(QMainWindow):
         )
 
         mode_font = QFont()
-        mode_font.setPointSize(12)
-        mode_font.setBold(True)
+
+        mode_font.setPointSize(
+            12
+        )
+
+        mode_font.setBold(
+            True
+        )
 
         self.mode_label.setFont(
             mode_font
@@ -202,7 +241,7 @@ class JarvisWindow(QMainWindow):
         )
 
         # =========================
-        # STATUS
+        # STATUS LABEL
         # =========================
 
         self.status_label = QLabel(
@@ -214,8 +253,14 @@ class JarvisWindow(QMainWindow):
         )
 
         status_font = QFont()
-        status_font.setPointSize(14)
-        status_font.setBold(True)
+
+        status_font.setPointSize(
+            14
+        )
+
+        status_font.setBold(
+            True
+        )
 
         self.status_label.setFont(
             status_font
@@ -228,12 +273,11 @@ class JarvisWindow(QMainWindow):
         main_layout.addStretch()
 
 
-    # =========================
+    # =========================================================
     # LIVE JARVIS STATE
-    # =========================
+    # =========================================================
 
     def update_jarvis_state(self):
-
         state = get_state()
 
         self.status_label.setText(
@@ -249,12 +293,11 @@ class JarvisWindow(QMainWindow):
         )
 
 
-    # =========================
+    # =========================================================
     # SETTINGS
-    # =========================
+    # =========================================================
 
     def open_settings(self):
-
         if (
             self.settings_window is None
             or not self.settings_window.isVisible()
@@ -268,12 +311,11 @@ class JarvisWindow(QMainWindow):
         self.settings_window.activateWindow()
 
 
-    # =========================
+    # =========================================================
     # HELP
-    # =========================
+    # =========================================================
 
     def open_help(self):
-
         if (
             self.help_window is None
             or not self.help_window.isVisible()
@@ -287,16 +329,15 @@ class JarvisWindow(QMainWindow):
         self.help_window.activateWindow()
 
 
-    # =========================
-    # TEXT INPUT
-    # =========================
+    # =========================================================
+    # TEXT INPUT POPUP
+    # =========================================================
 
     def request_text_input(
         self,
         title,
         message
     ):
-
         text, accepted = QInputDialog.getText(
             self,
             title,
@@ -309,20 +350,35 @@ class JarvisWindow(QMainWindow):
             )
 
         else:
-            submit_text_input("")
+            submit_text_input(
+                ""
+            )
 
 
-    # =========================
-    # THEME
-    # =========================
+    # =========================================================
+    # THEME UPDATES
+    # =========================================================
 
-    def apply_theme(self):
+    def on_theme_changed(
+        self,
+        theme
+    ):
+        self.theme = theme.copy()
 
-        background = self.theme[
+        self.apply_theme(
+            self.theme
+        )
+
+
+    def apply_theme(
+        self,
+        theme
+    ):
+        background = theme[
             "color_1"
         ]
 
-        accent = self.theme[
+        accent = theme[
             "color_2"
         ]
 
@@ -373,23 +429,11 @@ class JarvisWindow(QMainWindow):
         )
 
 
-    def check_theme(self):
-
-        new_theme = load_theme()
-
-        if new_theme != self.theme:
-
-            self.theme = new_theme
-
-            self.apply_theme()
-
-
-    # =========================
+    # =========================================================
     # SHUTDOWN
-    # =========================
+    # =========================================================
 
     def shutdown_gui(self):
-
         print(
             "Closing JARVIS GUI..."
         )
@@ -400,8 +444,11 @@ class JarvisWindow(QMainWindow):
             app.quit()
 
 
-def start_gui():
+# =========================================================
+# STANDALONE GUI TEST
+# =========================================================
 
+def start_gui():
     app = QApplication(
         sys.argv
     )

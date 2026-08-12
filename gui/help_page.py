@@ -1,31 +1,57 @@
 from PySide6.QtCore import Qt
+
 from PySide6.QtWidgets import (
-    QWidget,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
-    QScrollArea
+    QWidget
 )
 
-from gui.theme_manager import load_theme
+from gui.theme_manager import (
+    load_theme,
+    theme_bus
+)
 
 
 class HelpPage(QWidget):
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(
+        self,
+        parent=None
+    ):
+        super().__init__(
+            parent
+        )
 
-        self.setWindowTitle("JARVIS Help")
-        self.resize(850, 700)
+        self.setWindowTitle(
+            "JARVIS Help"
+        )
+
+        self.resize(
+            900,
+            700
+        )
 
         self.theme = load_theme()
 
         self.build_ui()
-        self.apply_theme()
+
+        self.apply_theme(
+            self.theme
+        )
+
+        theme_bus.theme_changed.connect(
+            self.on_theme_changed
+        )
 
 
     def build_ui(self):
-        main_layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(
+            self
+        )
 
         main_layout.setContentsMargins(
             20,
@@ -34,336 +60,563 @@ class HelpPage(QWidget):
             20
         )
 
-        # =========================
-        # BACK BUTTON
-        # =========================
+        top_bar = QHBoxLayout()
 
-        self.back_button = QPushButton("← Back")
-        self.back_button.setFixedWidth(100)
+        back_button = QPushButton(
+            "← Back"
+        )
 
-        self.back_button.clicked.connect(
+        back_button.setFixedWidth(
+            100
+        )
+
+        back_button.clicked.connect(
             self.close
         )
 
-        main_layout.addWidget(
-            self.back_button,
-            alignment=Qt.AlignLeft
+        title = QLabel(
+            "JARVIS HELP"
         )
-
-        # =========================
-        # TITLE
-        # =========================
-
-        title = QLabel("JARVIS HELP")
 
         title.setAlignment(
             Qt.AlignCenter
         )
 
-        title.setStyleSheet("""
-            font-size: 26px;
-            font-weight: bold;
-        """)
+        title.setStyleSheet(
+            "font-size: 24px; "
+            "font-weight: bold;"
+        )
 
-        main_layout.addWidget(title)
+        top_bar.addWidget(
+            back_button
+        )
 
-        # =========================
-        # SCROLL AREA
-        # =========================
+        top_bar.addStretch()
+
+        top_bar.addWidget(
+            title
+        )
+
+        top_bar.addStretch()
+
+        spacer = QWidget()
+
+        spacer.setFixedWidth(
+            100
+        )
+
+        top_bar.addWidget(
+            spacer
+        )
+
+        main_layout.addLayout(
+            top_bar
+        )
+
 
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
 
-        content = QWidget()
-
-        content_layout = QVBoxLayout(
-            content
+        scroll.setWidgetResizable(
+            True
         )
 
-        content_layout.setSpacing(18)
-
-        # =========================
-        # HELP SECTIONS
-        # =========================
-
-        self.add_section(
-            content_layout,
-            "Wake JARVIS",
-            """
-Say "Jarvis" to wake the assistant.
-
-After JARVIS wakes up, you can continue giving commands without repeating the wake word every time.
-
-To put JARVIS back into idle mode, say:
-• Go to sleep
-• Jarvis sleep
-• Jarvis go
-"""
+        scroll.setFrameShape(
+            QFrame.NoFrame
         )
 
-        self.add_section(
-            content_layout,
-            "Interrupt JARVIS",
-            """
-While JARVIS is speaking, say:
+        container = QWidget()
 
-• Jarvis stop
-• Stop
-• Stop talking
-• Be quiet
-
-JARVIS will stop speaking and return to listening mode.
-"""
+        self.content_layout = QVBoxLayout(
+            container
         )
 
-        self.add_section(
-            content_layout,
-            "Open Apps",
-            """
-You can launch apps that have been assigned a JARVIS name in Settings.
-
-Examples:
-
-• Open Chrome
-• Launch Discord
-• Open Steam
-• Launch FC 26
-
-Go to:
-Settings → Apps
-
-Search for the app, assign a name, then click Save Aliases.
-"""
+        self.content_layout.setContentsMargins(
+            20,
+            20,
+            20,
+            20
         )
 
-        self.add_section(
-            content_layout,
-            "Close Apps",
-            """
-JARVIS can close apps that were assigned in Settings.
-
-Examples:
-
-• Close Chrome
-• Close Discord
-• Quit Steam
-"""
+        self.content_layout.setSpacing(
+            18
         )
 
-        self.add_section(
-            content_layout,
-            "Websites",
-            """
-JARVIS can open websites directly.
-
-Examples:
-
-• Open youtube.com
-• Open gmail.com
-• Open reddit.com
-• Open github.com
-"""
+        scroll.setWidget(
+            container
         )
-
-        self.add_section(
-            content_layout,
-            "Google Search",
-            """
-JARVIS can search Google for you.
-
-Examples:
-
-• Search Google for Python tutorials
-• Search for RTX 3070 drivers
-• Search for weather in Toronto
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "System Information",
-            """
-Examples:
-
-• What CPU do I have?
-• What GPU do I have?
-• What RAM do I have?
-• What is my CPU usage?
-• How much RAM am I using?
-• System report
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "Shut Down Your PC",
-            """
-Say:
-
-"Shut down my computer."
-
-JARVIS will ask you to confirm.
-
-Say:
-
-"Confirm shutdown."
-
-to continue.
-
-Say:
-
-"Cancel shutdown."
-
-to cancel.
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "App Scanner",
-            """
-JARVIS scans your computer for installed applications.
-
-Go to:
-
-Settings → Apps
-
-From there you can:
-
-• Search detected apps
-• Assign custom names
-• Save aliases
-• Rescan your computer
-
-Example:
-
-Detected app:
-Discord.exe
-
-JARVIS name:
-discord
-
-Then say:
-
-"Launch Discord."
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "Appearance",
-            """
-Go to:
-
-Settings → Appearance
-
-Color 1 controls the main background.
-
-Color 2 controls the JARVIS accent color.
-
-The accent color changes things such as:
-
-• Orb rings
-• Orb spikes
-• Buttons
-• Status text
-• Interface highlights
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "JARVIS States",
-            """
-The main screen shows what JARVIS is currently doing.
-
-IDLE
-Waiting for the wake word.
-
-LISTENING
-Listening for your command.
-
-THINKING
-Processing your request.
-
-SPEAKING
-JARVIS is talking.
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "Exit JARVIS",
-            """
-Say:
-
-• Jarvis exit
-• Exit
-• Shut down Jarvis
-
-JARVIS will shut itself down and close the application.
-"""
-        )
-
-        self.add_section(
-            content_layout,
-            "Email",
-            """
-Email control is coming next.
-
-The planned system will let you:
-
-• Compose emails by voice
-• Choose contacts
-• Set a subject
-• Dictate the message
-• Review the email
-• Confirm before sending
-"""
-        )
-
-        content_layout.addStretch()
-
-        scroll.setWidget(content)
 
         main_layout.addWidget(
             scroll
         )
 
 
-    def add_section(
-        self,
-        layout,
-        title_text,
-        body_text
-    ):
-        title = QLabel(title_text)
-
-        title.setStyleSheet("""
-            font-size: 18px;
-            font-weight: bold;
-        """)
-
-        body = QLabel(
-            body_text.strip()
+        intro = QLabel(
+            "JARVIS is a voice-controlled "
+            "desktop assistant. Wake it, "
+            "speak naturally, and use the "
+            "examples below."
         )
 
-        body.setWordWrap(True)
+        intro.setWordWrap(
+            True
+        )
+
+        self.content_layout.addWidget(
+            intro
+        )
+
+
+        self.add_section(
+            "Wake and Sleep",
+
+            """
+Say "Jarvis" to wake the assistant.
+
+Say:
+
+"Jarvis go"
+"Jarvis sleep"
+"Go to sleep"
+
+to return to IDLE.
+"""
+        )
+
+
+        self.add_section(
+            "Interrupt JARVIS",
+
+            """
+Say:
+
+"Jarvis stop"
+
+while JARVIS is speaking or thinking
+to stop the current response.
+"""
+        )
+
+
+        self.add_section(
+            "AI Modes",
+
+            """
+Say:
+
+"Normal mode"
+
+for the fast everyday AI.
+
+Say:
+
+"Think mode"
+
+for the deeper AI.
+
+The current mode is shown above the orb.
+
+Models and temperature can be changed in:
+
+Settings → AI
+"""
+        )
+
+
+        self.add_section(
+            "Type on Your Screen",
+
+            """
+Place your cursor in a text field or editor.
+
+Then say:
+
+"Type hello world"
+
+JARVIS pastes the requested text at
+the current cursor position.
+"""
+        )
+
+
+        self.add_section(
+            "Generate Writing and Paste It",
+
+            """
+Keep your cursor where you want the result.
+
+Examples:
+
+"Summarize the Second World War and
+paste the summary here"
+
+"Write a paragraph about space exploration
+and paste it here"
+
+"Write an introduction about a famous
+book and paste it here"
+
+JARVIS generates the content using the
+active AI mode and inserts it at the cursor.
+"""
+        )
+
+
+        self.add_section(
+            "Work With Selected Text",
+
+            """
+Highlight text first.
+
+Then say commands such as:
+
+"Summarize this"
+
+"Rewrite this"
+
+"Fix grammar"
+
+"Make this shorter"
+
+"Translate this to French"
+
+"Explain this"
+
+Rewrite, grammar, shortening and translation
+commands replace the selected text.
+
+Summary and explanation are spoken unless
+you ask JARVIS to paste the result.
+"""
+        )
+
+
+        self.add_section(
+            "Coding in VS Code",
+
+            """
+Put your cursor inside VS Code.
+
+Examples:
+
+"Write a Python program that prints hello
+when called upon"
+
+"Write a function that sorts a list"
+
+JARVIS generates the code and inserts it
+into the active editor.
+
+Generated code is not automatically executed.
+"""
+        )
+
+
+        self.add_section(
+            "Fix Selected Code",
+
+            """
+Highlight code.
+
+Then say:
+
+"Fix this code"
+
+or:
+
+"Add comments to this code"
+
+JARVIS replaces the selected code with
+the generated revision.
+"""
+        )
+
+
+        self.add_section(
+            "Create Coding Projects",
+
+            """
+Examples:
+
+"Create a project for a Python calculator"
+
+"Build an app that tracks tasks"
+
+"Write a program for a quiz and create
+the necessary files"
+
+JARVIS creates a new project under:
+
+Documents\\JARVIS Projects
+
+It creates the needed text files and opens
+the project in VS Code when available.
+
+JARVIS does not automatically run
+the generated project.
+"""
+        )
+
+
+        self.add_section(
+            "Apps and Websites",
+
+            """
+Examples:
+
+"Open Chrome"
+
+"Close Chrome"
+
+"Open youtube.com"
+
+"Search Google for Python tutorials"
+
+Manage application aliases from:
+
+Settings → Apps
+"""
+        )
+
+
+        self.add_section(
+            "Email",
+
+            """
+Say:
+
+"Compose an email"
+
+Type the recipient or a saved contact name.
+
+Then dictate the subject and message.
+
+At confirmation say:
+
+"Confirm send"
+
+"Edit email"
+
+or:
+
+"Cancel email"
+
+After saying "Edit email", choose:
+
+Recipient
+Subject
+Body
+
+Contacts are managed in:
+
+Settings → Email
+"""
+        )
+
+
+        self.add_section(
+            "System Information",
+
+            """
+Examples:
+
+"What CPU do I have?"
+
+"What GPU do I have?"
+
+"How much RAM am I using?"
+
+"System report"
+"""
+        )
+
+
+        self.add_section(
+            "Computer Shutdown",
+
+            """
+Say:
+
+"Shut down my computer"
+
+JARVIS asks for confirmation first.
+
+Say:
+
+"Confirm shutdown"
+
+or:
+
+"Cancel shutdown"
+"""
+        )
+
+
+        self.add_section(
+            "Appearance",
+
+            """
+Open:
+
+Settings → Appearance
+
+Background and accent changes now update:
+
+• Main JARVIS window
+• JARVIS orb
+• Mode label
+• State label
+• Settings
+• Help
+
+Color changes are previewed immediately.
+
+Click Save Theme to keep them for
+future launches.
+"""
+        )
+
+
+        self.add_section(
+            "Orb States",
+
+            """
+Below the orb:
+
+IDLE
+LISTENING
+THINKING
+SPEAKING
+
+Above the orb:
+
+NORMAL MODE
+
+or
+
+THINK MODE
+"""
+        )
+
+
+        self.add_section(
+            "User Data",
+
+            """
+JARVIS stores personal data under:
+
+%LOCALAPPDATA%\\JARVIS\\data
+
+This includes things such as:
+
+• AI settings
+• App aliases
+• Contacts
+• Theme
+• Gmail authorization
+"""
+        )
+
+
+        self.add_section(
+            "Exit JARVIS",
+
+            """
+Say:
+
+"Jarvis exit"
+
+or:
+
+"Shut down Jarvis"
+
+to close the assistant and GUI.
+"""
+        )
+
+
+        self.content_layout.addStretch()
+
+
+    def add_section(
+        self,
+        title,
+        text
+    ):
+        section = QFrame()
+
+        section.setObjectName(
+            "helpSection"
+        )
+
+        layout = QVBoxLayout(
+            section
+        )
+
+        layout.setContentsMargins(
+            16,
+            14,
+            16,
+            14
+        )
+
+        heading = QLabel(
+            title
+        )
+
+        heading.setObjectName(
+            "helpHeading"
+        )
+
+        heading.setStyleSheet(
+            "font-size: 18px; "
+            "font-weight: bold;"
+        )
+
+        body = QLabel(
+            text.strip()
+        )
+
+        body.setWordWrap(
+            True
+        )
 
         body.setTextInteractionFlags(
             Qt.TextSelectableByMouse
         )
 
-        layout.addWidget(title)
-        layout.addWidget(body)
+        layout.addWidget(
+            heading
+        )
+
+        layout.addWidget(
+            body
+        )
+
+        self.content_layout.addWidget(
+            section
+        )
 
 
-    def apply_theme(self):
-        background = self.theme[
+    def on_theme_changed(
+        self,
+        theme
+    ):
+        self.theme = theme.copy()
+
+        self.apply_theme(
+            self.theme
+        )
+
+
+    def apply_theme(
+        self,
+        theme
+    ):
+        background = theme[
             "color_1"
         ]
 
-        accent = self.theme[
+        accent = theme[
             "color_2"
         ]
 
@@ -376,6 +629,7 @@ The planned system will let you:
 
             QLabel {{
                 color: {accent};
+                font-size: 14px;
             }}
 
             QPushButton {{
@@ -392,8 +646,18 @@ The planned system will let you:
             }}
 
             QScrollArea {{
+                border: none;
+                background-color: {background};
+            }}
+
+            QFrame#helpSection {{
                 border: 1px solid {accent};
-                border-radius: 6px;
+                border-radius: 10px;
+                background-color: {background};
+            }}
+
+            QLabel#helpHeading {{
+                color: {accent};
             }}
             """
         )

@@ -1,30 +1,63 @@
-import time
 import threading
+import time
 
-from core.intent_router import process
-from core.voice_output import speak, stop_voice
-from core.voice_input import listen, listen_for_stop
-from core.wake_word import wait_for_wake_word
+from core.agent_router import (
+    build_agent_request
+)
 
-from core.ui_state import (
-    set_state,
-    request_shutdown,
-    request_text_input
+from core.ai_engine import (
+    ask_ai
 )
 
 from core.ai_mode import (
-    set_ai_mode,
-    get_ai_mode
+    get_ai_mode,
+    set_ai_mode
 )
 
-from core.system_control import shutdown_pc
-from core.gmail_manager import send_email
-from core.contacts_manager import resolve_recipient
+from core.coding_agent import (
+    create_project_from_response
+)
 
+from core.contacts_manager import (
+    resolve_recipient
+)
 
-# =========================
-# COMMAND LISTS
-# =========================
+from core.desktop_agent import (
+    paste_text
+)
+
+from core.gmail_manager import (
+    send_email
+)
+
+from core.intent_router import (
+    process
+)
+
+from core.system_control import (
+    shutdown_pc
+)
+
+from core.ui_state import (
+    request_shutdown,
+    request_text_input,
+    set_state
+)
+
+from core.voice_input import (
+    listen,
+    listen_for_stop
+)
+
+from core.voice_output import (
+    speak,
+    stop_voice
+)
+
+from core.wake_word import (
+    wait_for_wake_word
+)
+
 
 SLEEP_COMMANDS = {
     "go to sleep",
@@ -129,15 +162,10 @@ EMAIL_CANCEL_COMMANDS = {
 }
 
 
-# =========================
-# GLOBAL STATE
-# =========================
-
 IDLE_TIMEOUT = 120
 
 speaking = False
 stop_requested = False
-
 shutdown_pending = False
 
 email_mode = False
@@ -150,12 +178,7 @@ email_data = {
 }
 
 
-# =========================
-# RESET EMAIL
-# =========================
-
 def reset_email():
-
     global email_mode
     global email_step
     global email_data
@@ -170,21 +193,17 @@ def reset_email():
     }
 
 
-# =========================
+# =========================================================
 # SPEECH INTERRUPTION
-# =========================
+# =========================================================
 
 def interrupt_monitor():
-
     global speaking
     global stop_requested
 
     while speaking:
-
         try:
-
             if listen_for_stop():
-
                 print(
                     "Interrupt detected!"
                 )
@@ -202,7 +221,6 @@ def interrupt_monitor():
                 break
 
         except Exception as error:
-
             print(
                 "Interrupt error:",
                 error
@@ -211,8 +229,9 @@ def interrupt_monitor():
             break
 
 
-def speak_with_interrupt(text):
-
+def speak_with_interrupt(
+    text
+):
     global speaking
     global stop_requested
 
@@ -239,11 +258,8 @@ def speak_with_interrupt(text):
     speech_thread.start()
 
     while speech_thread.is_alive():
-
         if stop_requested:
-
             stop_voice()
-
             break
 
         time.sleep(
@@ -256,64 +272,64 @@ def speak_with_interrupt(text):
         stop_voice()
 
 
-# =========================
-# THINKING INTERRUPTION
-# =========================
+# =========================================================
+# INTERRUPTIBLE WORK
+# =========================================================
 
-def think_with_interrupt(command):
-
+def run_interruptible_worker(
+    worker,
+    *args
+):
     global stop_requested
 
     stop_requested = False
 
     result = {
-        "response": None,
+        "value": None,
         "finished": False
     }
 
 
-    def ai_worker():
-
+    def worker_thread():
         try:
-
-            result["response"] = process(
-                command
+            result[
+                "value"
+            ] = worker(
+                *args
             )
 
         except Exception as error:
-
             print(
-                "AI processing error:",
+                "Worker error:",
                 error
             )
 
-            result["response"] = (
-                "I encountered an error while "
-                "processing that request."
-            )
+            result[
+                "value"
+            ] = None
 
         finally:
-
-            result["finished"] = True
+            result[
+                "finished"
+            ] = True
 
 
     set_state(
         "THINKING"
     )
 
-    ai_thread = threading.Thread(
-        target=ai_worker,
+    thread = threading.Thread(
+        target=worker_thread,
         daemon=True
     )
 
-    ai_thread.start()
+    thread.start()
 
-    while not result["finished"]:
-
+    while not result[
+        "finished"
+    ]:
         try:
-
             if listen_for_stop():
-
                 print(
                     "Thinking interrupted!"
                 )
@@ -327,7 +343,6 @@ def think_with_interrupt(command):
                 return None
 
         except Exception as error:
-
             print(
                 "Thinking interrupt error:",
                 error
@@ -338,16 +353,33 @@ def think_with_interrupt(command):
         )
 
     return result[
-        "response"
+        "value"
     ]
 
 
-# =========================
-# EMAIL RECIPIENT POPUP
-# =========================
+def think_with_interrupt(
+    command
+):
+    return run_interruptible_worker(
+        process,
+        command
+    )
+
+
+def ai_with_interrupt(
+    prompt
+):
+    return run_interruptible_worker(
+        ask_ai,
+        prompt
+    )
+
+
+# =========================================================
+# EMAIL RECIPIENT
+# =========================================================
 
 def ask_for_recipient():
-
     set_state(
         "SPEAKING"
     )
@@ -358,35 +390,165 @@ def ask_for_recipient():
 
     typed_recipient = request_text_input(
         "Compose Email",
-        "Enter an email address or contact name:"
+        "Enter an email address "
+        "or contact name:"
     )
 
     if not typed_recipient:
         return None
 
-    recipient = resolve_recipient(
+    return resolve_recipient(
         typed_recipient
     )
 
-    return recipient
+
+# =========================================================
+# DESKTOP AGENT
+# =========================================================
+
+def handle_agent_request(
+    request
+):
+    global stop_requested
+
+    kind = request.get(
+        "kind"
+    )
+
+    if kind == "message":
+        speak_with_interrupt(
+            request.get(
+                "message",
+                "I couldn't complete "
+                "that request, sir."
+            )
+        )
+
+        return True
 
 
-# =========================
+    if kind == "literal_paste":
+        if paste_text(
+            request.get(
+                "text",
+                ""
+            )
+        ):
+            speak_with_interrupt(
+                "Done, sir."
+            )
+
+        else:
+            speak_with_interrupt(
+                "I couldn't type into "
+                "the active window, sir."
+            )
+
+        return True
+
+
+    if kind not in {
+        "paste_ai",
+        "speak_ai",
+        "project"
+    }:
+        return False
+
+
+    speak_with_interrupt(
+        "One moment, sir."
+    )
+
+    if stop_requested:
+        stop_requested = False
+
+        set_state(
+            "LISTENING"
+        )
+
+        return True
+
+
+    generated = ai_with_interrupt(
+        request.get(
+            "prompt",
+            ""
+        )
+    )
+
+
+    if stop_requested:
+        stop_requested = False
+
+        set_state(
+            "LISTENING"
+        )
+
+        return True
+
+
+    if not generated:
+        speak_with_interrupt(
+            "I couldn't generate the "
+            "requested content, sir."
+        )
+
+        return True
+
+
+    if kind == "speak_ai":
+        speak_with_interrupt(
+            generated
+        )
+
+        return True
+
+
+    if kind == "paste_ai":
+        if paste_text(
+            generated
+        ):
+            speak_with_interrupt(
+                request.get(
+                    "success_message",
+                    "Done, sir."
+                )
+            )
+
+        else:
+            speak_with_interrupt(
+                "I generated the content, "
+                "but I couldn't paste it "
+                "into the active window, sir."
+            )
+
+        return True
+
+
+    success, message = (
+        create_project_from_response(
+            generated
+        )
+    )
+
+    speak_with_interrupt(
+        message
+    )
+
+    return True
+
+
+# =========================================================
 # MAIN ASSISTANT
-# =========================
+# =========================================================
 
 def start_assistant():
-
     global stop_requested
     global shutdown_pending
 
     global email_mode
     global email_step
     global email_data
-
-    # =========================
-    # STARTUP
-    # =========================
 
     set_state(
         "SPEAKING"
@@ -396,12 +558,8 @@ def start_assistant():
         "JARVIS is online."
     )
 
-    # =========================
-    # WAKE LOOP
-    # =========================
 
     while True:
-
         set_state(
             "IDLE"
         )
@@ -426,12 +584,8 @@ def start_assistant():
 
         last_activity = time.time()
 
-        # =========================
-        # ACTIVE LOOP
-        # =========================
 
         while True:
-
             raw_command = listen()
 
             # =========================
@@ -439,14 +593,13 @@ def start_assistant():
             # =========================
 
             if not raw_command:
-
                 if (
                     time.time()
                     - last_activity
                     > IDLE_TIMEOUT
                 ):
-
                     reset_email()
+
                     shutdown_pending = False
 
                     set_state(
@@ -465,10 +618,12 @@ def start_assistant():
 
                 continue
 
+
             last_activity = time.time()
 
             raw_command = (
-                raw_command.strip()
+                raw_command
+                .strip()
             )
 
             command = (
@@ -477,12 +632,12 @@ def start_assistant():
                 .strip()
             )
 
+
             # =========================
-            # EXIT JARVIS
+            # EXIT
             # =========================
 
             if command in EXIT_COMMANDS:
-
                 reset_email()
 
                 set_state(
@@ -501,8 +656,9 @@ def start_assistant():
 
                 return
 
+
             # =========================
-            # PC SHUTDOWN CONFIRMATION
+            # SHUTDOWN CONFIRMATION
             # =========================
 
             if shutdown_pending:
@@ -511,7 +667,6 @@ def start_assistant():
                     command
                     in SHUTDOWN_CONFIRM_COMMANDS
                 ):
-
                     shutdown_pending = False
 
                     set_state(
@@ -526,11 +681,11 @@ def start_assistant():
 
                     return
 
+
                 if (
                     command
                     in SHUTDOWN_CANCEL_COMMANDS
                 ):
-
                     shutdown_pending = False
 
                     set_state(
@@ -547,6 +702,7 @@ def start_assistant():
 
                     continue
 
+
                 set_state(
                     "SPEAKING"
                 )
@@ -562,39 +718,38 @@ def start_assistant():
 
                 continue
 
+
             # =========================
             # AI MODE SWITCHING
             # =========================
 
-            # We don't switch modes in the middle
-            # of composing an email.
-
             if not email_mode:
 
-                if command in NORMAL_MODE_COMMANDS:
+                if (
+                    command
+                    in NORMAL_MODE_COMMANDS
+                ):
+                    set_state(
+                        "SPEAKING"
+                    )
 
-                    if get_ai_mode() == "normal":
-
-                        set_state(
-                            "SPEAKING"
-                        )
-
+                    if (
+                        get_ai_mode()
+                        == "normal"
+                    ):
                         speak(
-                            "Normal mode is already active, sir."
+                            "Normal mode is already "
+                            "active, sir."
                         )
 
                     else:
-
                         set_ai_mode(
                             "normal"
                         )
 
                         print(
-                            "AI mode changed to NORMAL"
-                        )
-
-                        set_state(
-                            "SPEAKING"
+                            "AI mode changed "
+                            "to NORMAL"
                         )
 
                         speak(
@@ -608,30 +763,31 @@ def start_assistant():
                     continue
 
 
-                if command in THINK_MODE_COMMANDS:
+                if (
+                    command
+                    in THINK_MODE_COMMANDS
+                ):
+                    set_state(
+                        "SPEAKING"
+                    )
 
-                    if get_ai_mode() == "think":
-
-                        set_state(
-                            "SPEAKING"
-                        )
-
+                    if (
+                        get_ai_mode()
+                        == "think"
+                    ):
                         speak(
-                            "Think mode is already active, sir."
+                            "Think mode is already "
+                            "active, sir."
                         )
 
                     else:
-
                         set_ai_mode(
                             "think"
                         )
 
                         print(
-                            "AI mode changed to THINK"
-                        )
-
-                        set_state(
-                            "SPEAKING"
+                            "AI mode changed "
+                            "to THINK"
                         )
 
                         speak(
@@ -644,18 +800,17 @@ def start_assistant():
 
                     continue
 
+
             # =========================
             # EMAIL MODE
             # =========================
 
             if email_mode:
 
-                # -------------------------
-                # CANCEL EMAIL
-                # -------------------------
-
-                if command in EMAIL_CANCEL_COMMANDS:
-
+                if (
+                    command
+                    in EMAIL_CANCEL_COMMANDS
+                ):
                     reset_email()
 
                     set_state(
@@ -672,12 +827,8 @@ def start_assistant():
 
                     continue
 
-                # -------------------------
-                # SUBJECT
-                # -------------------------
 
                 if email_step == "subject":
-
                     email_data[
                         "subject"
                     ] = raw_command
@@ -689,7 +840,8 @@ def start_assistant():
                     )
 
                     speak(
-                        "What would you like me to say?"
+                        "What would you like "
+                        "me to say?"
                     )
 
                     set_state(
@@ -698,12 +850,8 @@ def start_assistant():
 
                     continue
 
-                # -------------------------
-                # BODY
-                # -------------------------
 
                 if email_step == "body":
-
                     email_data[
                         "body"
                     ] = raw_command
@@ -726,9 +874,6 @@ def start_assistant():
 
                     continue
 
-                # -------------------------
-                # CONFIRM / EDIT
-                # -------------------------
 
                 if email_step == "confirm":
 
@@ -736,33 +881,32 @@ def start_assistant():
                         command
                         in EMAIL_CONFIRM_COMMANDS
                     ):
-
                         set_state(
                             "THINKING"
                         )
 
                         success = send_email(
-                            email_data["to"],
-                            email_data["subject"],
-                            email_data["body"]
+                            email_data[
+                                "to"
+                            ],
+                            email_data[
+                                "subject"
+                            ],
+                            email_data[
+                                "body"
+                            ]
+                        )
+
+                        set_state(
+                            "SPEAKING"
                         )
 
                         if success:
-
-                            set_state(
-                                "SPEAKING"
-                            )
-
                             speak(
                                 "Email sent, sir."
                             )
 
                         else:
-
-                            set_state(
-                                "SPEAKING"
-                            )
-
                             speak(
                                 "I couldn't send "
                                 "the email, sir."
@@ -776,11 +920,11 @@ def start_assistant():
 
                         continue
 
+
                     if (
                         command
                         in EMAIL_EDIT_COMMANDS
                     ):
-
                         email_step = (
                             "edit_choice"
                         )
@@ -790,8 +934,8 @@ def start_assistant():
                         )
 
                         speak(
-                            "Which part would you like "
-                            "to edit? Recipient, "
+                            "Which part would you "
+                            "like to edit? Recipient, "
                             "subject, or body?"
                         )
 
@@ -800,6 +944,7 @@ def start_assistant():
                         )
 
                         continue
+
 
                     set_state(
                         "SPEAKING"
@@ -816,9 +961,6 @@ def start_assistant():
 
                     continue
 
-                # -------------------------
-                # EDIT CHOICE
-                # -------------------------
 
                 if email_step == "edit_choice":
 
@@ -827,52 +969,28 @@ def start_assistant():
                         "edit recipient",
                         "change recipient"
                     }:
-
                         recipient = (
                             ask_for_recipient()
                         )
 
-                        if not recipient:
+                        if recipient:
+                            email_data[
+                                "to"
+                            ] = recipient
 
-                            set_state(
-                                "SPEAKING"
+                            speak(
+                                "Recipient updated. "
+                                "Say confirm send, "
+                                "edit email, or cancel."
                             )
 
+                        else:
                             speak(
                                 "Recipient edit cancelled."
                             )
 
-                            email_step = (
-                                "confirm"
-                            )
-
-                            set_state(
-                                "LISTENING"
-                            )
-
-                            continue
-
-                        email_data[
-                            "to"
-                        ] = recipient
-
-                        print(
-                            "Updated email recipient:",
-                            recipient
-                        )
-
                         email_step = (
                             "confirm"
-                        )
-
-                        set_state(
-                            "SPEAKING"
-                        )
-
-                        speak(
-                            "Recipient updated. "
-                            "Say confirm send, "
-                            "edit email, or cancel."
                         )
 
                         set_state(
@@ -887,7 +1005,6 @@ def start_assistant():
                         "edit subject",
                         "change subject"
                     }:
-
                         email_step = (
                             "edit_subject"
                         )
@@ -916,7 +1033,6 @@ def start_assistant():
                         "edit message",
                         "change message"
                     }:
-
                         email_step = (
                             "edit_body"
                         )
@@ -936,6 +1052,7 @@ def start_assistant():
 
                         continue
 
+
                     set_state(
                         "SPEAKING"
                     )
@@ -951,12 +1068,11 @@ def start_assistant():
 
                     continue
 
-                # -------------------------
-                # EDIT SUBJECT
-                # -------------------------
 
-                if email_step == "edit_subject":
-
+                if (
+                    email_step
+                    == "edit_subject"
+                ):
                     email_data[
                         "subject"
                     ] = raw_command
@@ -981,12 +1097,11 @@ def start_assistant():
 
                     continue
 
-                # -------------------------
-                # EDIT BODY
-                # -------------------------
 
-                if email_step == "edit_body":
-
+                if (
+                    email_step
+                    == "edit_body"
+                ):
                     email_data[
                         "body"
                     ] = raw_command
@@ -1011,18 +1126,22 @@ def start_assistant():
 
                     continue
 
+
             # =========================
             # START EMAIL
             # =========================
 
-            if command in EMAIL_START_COMMANDS:
-
+            if (
+                command
+                in EMAIL_START_COMMANDS
+            ):
                 reset_email()
 
-                recipient = ask_for_recipient()
+                recipient = (
+                    ask_for_recipient()
+                )
 
                 if not recipient:
-
                     set_state(
                         "SPEAKING"
                     )
@@ -1036,6 +1155,7 @@ def start_assistant():
                     )
 
                     continue
+
 
                 print(
                     "Email recipient:",
@@ -1056,7 +1176,8 @@ def start_assistant():
                 )
 
                 speak(
-                    "What should the subject be, sir?"
+                    "What should the "
+                    "subject be, sir?"
                 )
 
                 set_state(
@@ -1065,12 +1186,15 @@ def start_assistant():
 
                 continue
 
+
             # =========================
-            # PC SHUTDOWN REQUEST
+            # PC SHUTDOWN
             # =========================
 
-            if command in PC_SHUTDOWN_COMMANDS:
-
+            if (
+                command
+                in PC_SHUTDOWN_COMMANDS
+            ):
                 shutdown_pending = True
 
                 set_state(
@@ -1088,12 +1212,15 @@ def start_assistant():
 
                 continue
 
+
             # =========================
             # SLEEP
             # =========================
 
-            if command in SLEEP_COMMANDS:
-
+            if (
+                command
+                in SLEEP_COMMANDS
+            ):
                 reset_email()
 
                 set_state(
@@ -1110,8 +1237,36 @@ def start_assistant():
 
                 break
 
+
             # =========================
-            # NORMAL COMMAND
+            # DESKTOP AGENT
+            # =========================
+
+            agent_request = (
+                build_agent_request(
+                    raw_command
+                )
+            )
+
+            if (
+                agent_request
+                is not None
+            ):
+                handle_agent_request(
+                    agent_request
+                )
+
+                stop_requested = False
+
+                set_state(
+                    "LISTENING"
+                )
+
+                continue
+
+
+            # =========================
+            # NORMAL COMMAND ROUTER
             # =========================
 
             speak_with_interrupt(
@@ -1119,7 +1274,6 @@ def start_assistant():
             )
 
             if stop_requested:
-
                 stop_requested = False
 
                 set_state(
@@ -1128,16 +1282,15 @@ def start_assistant():
 
                 continue
 
-            # =========================
-            # PROCESS
-            # =========================
 
-            response = think_with_interrupt(
-                command
+            response = (
+                think_with_interrupt(
+                    command
+                )
             )
 
-            if stop_requested:
 
+            if stop_requested:
                 stop_requested = False
 
                 set_state(
@@ -1146,15 +1299,12 @@ def start_assistant():
 
                 continue
 
-            # =========================
-            # SPEAK RESPONSE
-            # =========================
 
             if response:
-
                 speak_with_interrupt(
                     response
                 )
+
 
             stop_requested = False
 

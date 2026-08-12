@@ -4,15 +4,11 @@ import os
 from core.paths import user_file
 
 
-CONTACTS_FILE = user_file(
-    "contacts.json"
-)
+CONTACTS_FILE = user_file("contacts.json")
 
 
 def load_contacts():
-    if not os.path.exists(
-        CONTACTS_FILE
-    ):
+    if not os.path.exists(CONTACTS_FILE):
         return {}
 
     try:
@@ -21,24 +17,21 @@ def load_contacts():
             "r",
             encoding="utf-8"
         ) as file:
-            return json.load(
-                file
-            )
+            return json.load(file)
 
     except Exception as error:
         print(
             "Contacts load error:",
             error
         )
-
         return {}
 
 
 def save_contacts(contacts):
+    folder = os.path.dirname(CONTACTS_FILE)
+
     os.makedirs(
-        os.path.dirname(
-            CONTACTS_FILE
-        ),
+        folder,
         exist_ok=True
     )
 
@@ -54,26 +47,13 @@ def save_contacts(contacts):
         )
 
 
-def add_contact(
-    name,
-    email
-):
+def add_contact(name, email):
     contacts = load_contacts()
 
-    name = (
-        name
-        .lower()
-        .strip()
-    )
+    name = name.lower().strip()
+    email = email.strip()
 
-    email = (
-        email
-        .strip()
-    )
-
-    contacts[
-        name
-    ] = email
+    contacts[name] = email
 
     save_contacts(
         contacts
@@ -85,18 +65,12 @@ def add_contact(
 def remove_contact(name):
     contacts = load_contacts()
 
-    name = (
-        name
-        .lower()
-        .strip()
-    )
+    name = name.lower().strip()
 
     if name not in contacts:
         return False
 
-    del contacts[
-        name
-    ]
+    del contacts[name]
 
     save_contacts(
         contacts
