@@ -1,6 +1,8 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
 # Virtual environment
 .venv/
@@ -8,9 +10,25 @@ __pycache__/
 # Runtime logs
 logs/*.log
 
-# User data
+# Personal / sensitive data
 data/*.json
+voice_settings.json
+gmail_token.json
+contacts.json
+apps.json
+apps_detected.json
+setup_complete.json
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Installer output
+installer_output/
+Output/
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini

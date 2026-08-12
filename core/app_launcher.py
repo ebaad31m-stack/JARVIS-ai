@@ -6,7 +6,9 @@ import webbrowser
 import psutil
 
 
-APP_FILE = "data/apps.json"
+from core.paths import user_file
+
+APP_FILE = user_file("apps.json")
 
 
 def load_apps():
