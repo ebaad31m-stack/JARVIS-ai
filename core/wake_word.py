@@ -1,43 +1,63 @@
 from openwakeword.model import Model
-import sounddevice as sd
+
 import numpy as np
+import sounddevice as sd
+
+
+WAKE_WORD = "hey_jarvis"
+DETECTION_THRESHOLD = 0.5
 
 
 def wait_for_wake_word():
-
     model = Model(
-        wakeword_models=["hey_jarvis"],
+        wakeword_models=[
+            WAKE_WORD
+        ],
         inference_framework="onnx"
     )
 
-    print("Waiting for wake word...")
+    print(
+        "Waiting for wake word..."
+    )
 
     detected = False
 
 
-    def callback(indata, frames, time, status):
-
+    def callback(
+        indata,
+        frames,
+        time_info,
+        status
+    ):
         nonlocal detected
 
         if detected:
             return
+
+        if status:
+            print(
+                "Wake audio status:",
+                status
+            )
 
         audio = np.frombuffer(
             indata,
             dtype=np.int16
         )
 
-        prediction = model.predict(audio)
+        prediction = model.predict(
+            audio
+        )
 
         score = prediction.get(
-            "hey_jarvis",
+            WAKE_WORD,
             0
         )
 
-
-        if score > 0.5:
-
-            print("Wake word detected!")
+        if score > DETECTION_THRESHOLD:
+            print(
+                "Wake word detected!"
+            )
 
             detected = True
 
@@ -49,8 +69,7 @@ def wait_for_wake_word():
         blocksize=1280,
         callback=callback
     ):
-
         while not detected:
-            sd.sleep(100)
-
-    return
+            sd.sleep(
+                100
+            )

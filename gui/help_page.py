@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -31,11 +32,13 @@ class HelpPage(QWidget):
         )
 
         self.resize(
-            900,
-            700
+            950,
+            760
         )
 
         self.theme = load_theme()
+
+        self.help_sections = []
 
         self.build_ui()
 
@@ -47,6 +50,10 @@ class HelpPage(QWidget):
             self.on_theme_changed
         )
 
+
+    # =========================================================
+    # MAIN UI
+    # =========================================================
 
     def build_ui(self):
         main_layout = QVBoxLayout(
@@ -60,17 +67,21 @@ class HelpPage(QWidget):
             20
         )
 
+        # =========================
+        # TOP BAR
+        # =========================
+
         top_bar = QHBoxLayout()
 
-        back_button = QPushButton(
+        self.back_button = QPushButton(
             "← Back"
         )
 
-        back_button.setFixedWidth(
+        self.back_button.setFixedWidth(
             100
         )
 
-        back_button.clicked.connect(
+        self.back_button.clicked.connect(
             self.close
         )
 
@@ -83,12 +94,14 @@ class HelpPage(QWidget):
         )
 
         title.setStyleSheet(
-            "font-size: 24px; "
-            "font-weight: bold;"
+            """
+            font-size: 24px;
+            font-weight: bold;
+            """
         )
 
         top_bar.addWidget(
-            back_button
+            self.back_button
         )
 
         top_bar.addStretch()
@@ -113,21 +126,63 @@ class HelpPage(QWidget):
             top_bar
         )
 
+        # =========================
+        # INTRO
+        # =========================
 
-        scroll = QScrollArea()
+        intro = QLabel(
+            "Use the search box below to find commands, "
+            "features, settings, and examples."
+        )
 
-        scroll.setWidgetResizable(
+        intro.setAlignment(
+            Qt.AlignCenter
+        )
+
+        intro.setWordWrap(
             True
         )
 
-        scroll.setFrameShape(
+        main_layout.addWidget(
+            intro
+        )
+
+        # =========================
+        # SEARCH
+        # =========================
+
+        self.search_box = QLineEdit()
+
+        self.search_box.setPlaceholderText(
+            "Search help... e.g. email, code, think mode, theme"
+        )
+
+        self.search_box.textChanged.connect(
+            self.filter_sections
+        )
+
+        main_layout.addWidget(
+            self.search_box
+        )
+
+        # =========================
+        # SCROLL AREA
+        # =========================
+
+        self.scroll = QScrollArea()
+
+        self.scroll.setWidgetResizable(
+            True
+        )
+
+        self.scroll.setFrameShape(
             QFrame.NoFrame
         )
 
-        container = QWidget()
+        self.container = QWidget()
 
         self.content_layout = QVBoxLayout(
-            container
+            self.container
         )
 
         self.content_layout.setContentsMargins(
@@ -141,131 +196,221 @@ class HelpPage(QWidget):
             18
         )
 
-        scroll.setWidget(
-            container
+        self.scroll.setWidget(
+            self.container
         )
 
         main_layout.addWidget(
-            scroll
+            self.scroll
         )
 
+        # =====================================================
+        # GETTING STARTED
+        # =====================================================
 
-        intro = QLabel(
-            "JARVIS is a voice-controlled "
-            "desktop assistant. Wake it, "
-            "speak naturally, and use the "
-            "examples below."
+        self.add_category(
+            "GETTING STARTED"
         )
-
-        intro.setWordWrap(
-            True
-        )
-
-        self.content_layout.addWidget(
-            intro
-        )
-
 
         self.add_section(
-            "Wake and Sleep",
-
+            "Wake JARVIS",
             """
-Say "Jarvis" to wake the assistant.
-
 Say:
+
+"Jarvis"
+
+while JARVIS is in IDLE mode.
+
+JARVIS will wake up, respond, and begin listening.
+
+Once awake, you can continue giving commands without
+repeating the wake word every time.
+"""
+        )
+
+        self.add_section(
+            "Put JARVIS to Sleep",
+            """
+Say any of these:
 
 "Jarvis go"
 "Jarvis sleep"
 "Go to sleep"
+"Stop listening"
 
-to return to IDLE.
+JARVIS will return to IDLE mode and wait for
+the wake word again.
 """
         )
 
+        self.add_section(
+            "Exit JARVIS",
+            """
+Say:
+
+"Jarvis exit"
+
+or:
+
+"Shut down Jarvis"
+
+This completely closes JARVIS and the GUI.
+"""
+        )
 
         self.add_section(
             "Interrupt JARVIS",
-
             """
+You can interrupt JARVIS while it is speaking
+or thinking.
+
 Say:
 
 "Jarvis stop"
 
-while JARVIS is speaking or thinking
-to stop the current response.
+The current response stops and JARVIS returns
+to listening.
 """
         )
 
+        # =====================================================
+        # AI
+        # =====================================================
+
+        self.add_category(
+            "AI"
+        )
 
         self.add_section(
-            "AI Modes",
-
+            "Normal Mode",
             """
-Say:
+Normal Mode is designed for faster everyday responses.
+
+Good for:
+
+• Basic questions
+• General conversation
+• Short explanations
+• Everyday requests
+
+Activate it by saying:
 
 "Normal mode"
 
-for the fast everyday AI.
+or:
 
-Say:
+"Jarvis normal mode"
 
-"Think mode"
-
-for the deeper AI.
-
-The current mode is shown above the orb.
-
-Models and temperature can be changed in:
-
-Settings → AI
+The active mode appears above the JARVIS orb.
 """
         )
 
+        self.add_section(
+            "Think Mode",
+            """
+Think Mode is designed for more complex requests.
+
+Good for:
+
+• Coding
+• Troubleshooting
+• Planning
+• Technical questions
+• Longer explanations
+• Complex reasoning
+
+Activate it by saying:
+
+"Think mode"
+
+or:
+
+"Jarvis think mode"
+"""
+        )
 
         self.add_section(
-            "Type on Your Screen",
-
+            "AI Settings",
             """
-Place your cursor in a text field or editor.
+Open:
+
+Settings → AI
+
+You can configure:
+
+• Normal Mode model
+• Think Mode model
+• Temperature
+
+The model fields are editable, so other Ollama
+models can be entered later.
+
+Temperature:
+
+Lower values make responses more focused
+and predictable.
+
+Higher values make responses more varied
+and creative.
+"""
+        )
+
+        # =====================================================
+        # DESKTOP AGENT
+        # =====================================================
+
+        self.add_category(
+            "DESKTOP AGENT"
+        )
+
+        self.add_section(
+            "Type Into Any App",
+            """
+Click inside a text field, editor, or document.
 
 Then say:
 
 "Type hello world"
 
-JARVIS pastes the requested text at
-the current cursor position.
+JARVIS pastes the requested text at the
+current cursor position.
+
+This can work in apps such as:
+
+• Notepad
+• VS Code
+• Microsoft Word
+• Browser text fields
+• Google Docs
+• Many other desktop applications
 """
         )
 
-
         self.add_section(
             "Generate Writing and Paste It",
-
             """
-Keep your cursor where you want the result.
+Place your cursor where the response should appear.
 
 Examples:
 
-"Summarize the Second World War and
-paste the summary here"
+"Summarize the Second World War and paste
+the summary here"
 
 "Write a paragraph about space exploration
 and paste it here"
 
-"Write an introduction about a famous
-book and paste it here"
+"Write an introduction about artificial
+intelligence and paste it here"
 
-JARVIS generates the content using the
-active AI mode and inserts it at the cursor.
+JARVIS generates the content using the active
+AI mode and inserts it at the cursor.
 """
         )
 
-
         self.add_section(
-            "Work With Selected Text",
-
+            "Selected Text Commands",
             """
-Highlight text first.
+Highlight some text first.
 
 Then say commands such as:
 
@@ -281,20 +426,29 @@ Then say commands such as:
 
 "Explain this"
 
-Rewrite, grammar, shortening and translation
-commands replace the selected text.
+For editing commands such as rewrite, grammar,
+translation, or shortening, JARVIS replaces the
+selected text.
 
-Summary and explanation are spoken unless
-you ask JARVIS to paste the result.
+Summary and explanation commands are normally
+spoken unless you specifically ask JARVIS to
+paste the result.
 """
         )
 
+        # =====================================================
+        # CODING
+        # =====================================================
+
+        self.add_category(
+            "CODING"
+        )
 
         self.add_section(
-            "Coding in VS Code",
-
+            "Write Code Into VS Code",
             """
-Put your cursor inside VS Code.
+Open a source file in VS Code and place the cursor
+where you want the code.
 
 Examples:
 
@@ -303,119 +457,281 @@ when called upon"
 
 "Write a function that sorts a list"
 
-JARVIS generates the code and inserts it
+"Generate code for a simple calculator"
+
+JARVIS generates the code and inserts it directly
 into the active editor.
 
 Generated code is not automatically executed.
 """
         )
 
-
         self.add_section(
             "Fix Selected Code",
-
             """
-Highlight code.
+Highlight code inside VS Code.
 
 Then say:
 
 "Fix this code"
 
-or:
+JARVIS sends the selected code to the AI and
+replaces it with the corrected version.
+
+You can also say:
 
 "Add comments to this code"
 
-JARVIS replaces the selected code with
-the generated revision.
+to automatically add useful comments.
 """
         )
 
-
         self.add_section(
             "Create Coding Projects",
-
             """
+JARVIS can create multi-file projects.
+
 Examples:
 
 "Create a project for a Python calculator"
 
 "Build an app that tracks tasks"
 
-"Write a program for a quiz and create
-the necessary files"
+"Write a quiz program and create the necessary files"
 
-JARVIS creates a new project under:
+Projects are created under:
 
 Documents\\JARVIS Projects
 
-It creates the needed text files and opens
-the project in VS Code when available.
-
-JARVIS does not automatically run
+JARVIS can create files and folders needed by
 the generated project.
+
+When possible, the project is opened in VS Code.
+
+Generated projects are not automatically executed.
 """
         )
 
+        # =====================================================
+        # EMAIL
+        # =====================================================
 
-        self.add_section(
-            "Apps and Websites",
-
-            """
-Examples:
-
-"Open Chrome"
-
-"Close Chrome"
-
-"Open youtube.com"
-
-"Search Google for Python tutorials"
-
-Manage application aliases from:
-
-Settings → Apps
-"""
+        self.add_category(
+            "EMAIL"
         )
 
-
         self.add_section(
-            "Email",
-
+            "Compose an Email",
             """
 Say:
 
 "Compose an email"
 
-Type the recipient or a saved contact name.
+JARVIS opens a recipient box.
 
-Then dictate the subject and message.
+You can type:
 
-At confirmation say:
-
-"Confirm send"
-
-"Edit email"
+• A full email address
 
 or:
 
-"Cancel email"
+• A saved contact name
 
-After saying "Edit email", choose:
-
-Recipient
-Subject
-Body
-
-Contacts are managed in:
-
-Settings → Email
+After that, JARVIS asks for the subject and body
+using voice.
 """
         )
 
+        self.add_section(
+            "Confirm an Email",
+            """
+When the email is ready, JARVIS asks what to do.
+
+Say:
+
+"Confirm send"
+
+to send it.
+
+Say:
+
+"Cancel email"
+
+to discard it.
+
+Say:
+
+"Edit email"
+
+to make changes before sending.
+"""
+        )
+
+        self.add_section(
+            "Edit an Email",
+            """
+After saying:
+
+"Edit email"
+
+JARVIS asks which part you want to edit.
+
+You can say:
+
+"Recipient"
+
+"Subject"
+
+"Body"
+
+Recipient changes use the typing box again.
+
+Subject and body changes are controlled by voice.
+
+After editing, JARVIS returns to the confirmation step.
+
+You can edit multiple parts before sending.
+"""
+        )
+
+        self.add_section(
+            "Contacts",
+            """
+Open:
+
+Settings → Email
+
+Contacts contain:
+
+• Name
+• Email address
+
+Example:
+
+Name:
+dad
+
+Email:
+dad@example.com
+
+When JARVIS asks for an email recipient, you can
+simply type:
+
+dad
+
+and JARVIS resolves the saved address automatically.
+"""
+        )
+
+        # =====================================================
+        # APPS / WEB
+        # =====================================================
+
+        self.add_category(
+            "APPS & WEB"
+        )
+
+        self.add_section(
+            "Open Apps",
+            """
+Examples:
+
+"Open Chrome"
+
+"Open calculator"
+
+"Launch Discord"
+
+Detected apps and custom names are managed from:
+
+Settings → Apps
+"""
+        )
+
+        self.add_section(
+            "Close Apps",
+            """
+Examples:
+
+"Close Chrome"
+
+"Quit Discord"
+
+JARVIS attempts to locate and close the corresponding
+desktop process.
+
+Some Windows system apps and browser links may not
+support this feature.
+"""
+        )
+
+        self.add_section(
+            "App Scanner",
+            """
+Open:
+
+Settings → Apps
+
+Use:
+
+Rescan Apps
+
+to search the computer for installed programs.
+
+You can assign friendly names to detected applications.
+
+Example:
+
+Detected:
+Google Chrome
+
+JARVIS Name:
+chrome
+
+Then say:
+
+"Open Chrome"
+"""
+        )
+
+        self.add_section(
+            "Open Websites",
+            """
+Examples:
+
+"Open youtube.com"
+
+"Open gmail.com"
+
+"Open openai.com"
+
+JARVIS opens the site in the default web browser.
+"""
+        )
+
+        self.add_section(
+            "Google Search",
+            """
+Examples:
+
+"Search Google for Python tutorials"
+
+"Search for RTX 3070 drivers"
+
+JARVIS opens the search results in the default browser.
+"""
+        )
+
+        # =====================================================
+        # SYSTEM
+        # =====================================================
+
+        self.add_category(
+            "SYSTEM"
+        )
 
         self.add_section(
             "System Information",
-
             """
 Examples:
 
@@ -423,20 +739,32 @@ Examples:
 
 "What GPU do I have?"
 
+"What RAM do I have?"
+
+"What Windows version am I using?"
+
+"How much storage do I have?"
+
+"What is my CPU usage?"
+
 "How much RAM am I using?"
+
+"What is my GPU status?"
 
 "System report"
 """
         )
 
-
         self.add_section(
-            "Computer Shutdown",
-
+            "Shut Down the Computer",
             """
 Say:
 
 "Shut down my computer"
+
+or:
+
+"Turn off my PC"
 
 JARVIS asks for confirmation first.
 
@@ -444,98 +772,249 @@ Say:
 
 "Confirm shutdown"
 
-or:
+to proceed.
+
+Say:
 
 "Cancel shutdown"
+
+to cancel.
 """
         )
 
+        # =====================================================
+        # APPEARANCE
+        # =====================================================
+
+        self.add_category(
+            "APPEARANCE"
+        )
 
         self.add_section(
-            "Appearance",
-
+            "Change Theme",
             """
 Open:
 
 Settings → Appearance
 
-Background and accent changes now update:
+You can change:
+
+• Background color
+• Accent color
+
+Theme changes update the full interface including:
 
 • Main JARVIS window
 • JARVIS orb
-• Mode label
-• State label
+• AI mode text
+• Activity state text
 • Settings
 • Help
 
-Color changes are previewed immediately.
+Changes can be previewed immediately.
 
-Click Save Theme to keep them for
-future launches.
+Click:
+
+Save Theme
+
+to keep the selected appearance for future launches.
 """
         )
 
-
         self.add_section(
-            "Orb States",
-
+            "Orb Status",
             """
-Below the orb:
+The text below the orb shows JARVIS activity.
 
 IDLE
-LISTENING
-THINKING
-SPEAKING
+Waiting for the wake word.
 
-Above the orb:
+LISTENING
+Waiting for your command.
+
+THINKING
+Processing a request.
+
+SPEAKING
+Responding to you.
+
+The text above the orb shows the active AI mode:
 
 NORMAL MODE
 
-or
+or:
 
 THINK MODE
 """
         )
 
+        # =====================================================
+        # STORAGE
+        # =====================================================
+
+        self.add_category(
+            "DATA & STORAGE"
+        )
 
         self.add_section(
-            "User Data",
-
+            "Personal JARVIS Data",
             """
-JARVIS stores personal data under:
+JARVIS stores personal settings separately for
+each Windows user.
+
+The data folder is:
 
 %LOCALAPPDATA%\\JARVIS\\data
 
-This includes things such as:
+It can contain:
 
 • AI settings
 • App aliases
+• Detected app information
 • Contacts
-• Theme
+• Theme settings
 • Gmail authorization
+
+This structure helps prepare JARVIS for installation
+on different computers.
 """
         )
-
 
         self.add_section(
-            "Exit JARVIS",
-
+            "Generated Coding Projects",
             """
-Say:
+Projects generated by the coding agent are stored in:
 
-"Jarvis exit"
+Documents\\JARVIS Projects
 
-or:
+JARVIS creates a separate folder for each project.
 
-"Shut down Jarvis"
-
-to close the assistant and GUI.
+If a folder name already exists, JARVIS creates a
+new uniquely numbered folder instead of overwriting
+the old project.
 """
         )
 
+        # =====================================================
+        # COMMAND QUICK REFERENCE
+        # =====================================================
+
+        self.add_category(
+            "QUICK COMMAND REFERENCE"
+        )
+
+        self.add_section(
+            "Useful Voice Commands",
+            """
+Wake:
+"Jarvis"
+
+Sleep:
+"Jarvis go"
+
+Stop response:
+"Jarvis stop"
+
+Fast AI:
+"Normal mode"
+
+Deep AI:
+"Think mode"
+
+Open app:
+"Open Chrome"
+
+Close app:
+"Close Chrome"
+
+Search:
+"Search Google for..."
+
+Email:
+"Compose an email"
+
+Type:
+"Type hello"
+
+Generate writing:
+"Write a paragraph about... and paste it here"
+
+Selected text:
+"Fix grammar"
+
+Coding:
+"Write a Python program that..."
+
+Project:
+"Create a project for..."
+
+PC shutdown:
+"Shut down my computer"
+
+Exit:
+"Jarvis exit"
+"""
+        )
+
+        self.no_results_label = QLabel(
+            "No help sections matched your search."
+        )
+
+        self.no_results_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.no_results_label.setVisible(
+            False
+        )
+
+        self.content_layout.addWidget(
+            self.no_results_label
+        )
 
         self.content_layout.addStretch()
 
+
+    # =========================================================
+    # CATEGORY
+    # =========================================================
+
+    def add_category(
+        self,
+        title
+    ):
+        label = QLabel(
+            title
+        )
+
+        label.setObjectName(
+            "categoryHeading"
+        )
+
+        label.setStyleSheet(
+            """
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+            """
+        )
+
+        self.content_layout.addWidget(
+            label
+        )
+
+        self.help_sections.append(
+            {
+                "type": "category",
+                "widget": label,
+                "search": title.lower()
+            }
+        )
+
+
+    # =========================================================
+    # HELP SECTION
+    # =========================================================
 
     def add_section(
         self,
@@ -548,11 +1027,11 @@ to close the assistant and GUI.
             "helpSection"
         )
 
-        layout = QVBoxLayout(
+        section_layout = QVBoxLayout(
             section
         )
 
-        layout.setContentsMargins(
+        section_layout.setContentsMargins(
             16,
             14,
             16,
@@ -568,8 +1047,10 @@ to close the assistant and GUI.
         )
 
         heading.setStyleSheet(
-            "font-size: 18px; "
-            "font-weight: bold;"
+            """
+            font-size: 18px;
+            font-weight: bold;
+            """
         )
 
         body = QLabel(
@@ -584,11 +1065,11 @@ to close the assistant and GUI.
             Qt.TextSelectableByMouse
         )
 
-        layout.addWidget(
+        section_layout.addWidget(
             heading
         )
 
-        layout.addWidget(
+        section_layout.addWidget(
             body
         )
 
@@ -596,6 +1077,76 @@ to close the assistant and GUI.
             section
         )
 
+        search_text = (
+            title
+            + " "
+            + text
+        ).lower()
+
+        self.help_sections.append(
+            {
+                "type": "section",
+                "widget": section,
+                "search": search_text
+            }
+        )
+
+
+    # =========================================================
+    # SEARCH
+    # =========================================================
+
+    def filter_sections(
+        self,
+        text
+    ):
+        query = (
+            text
+            .lower()
+            .strip()
+        )
+
+        visible_sections = 0
+
+        category_visible = False
+
+        for item in self.help_sections:
+
+            if item[
+                "type"
+            ] == "category":
+                item[
+                    "widget"
+                ].setVisible(
+                    not query
+                )
+
+                continue
+
+            match = (
+                not query
+                or query in item[
+                    "search"
+                ]
+            )
+
+            item[
+                "widget"
+            ].setVisible(
+                match
+            )
+
+            if match:
+                visible_sections += 1
+
+        self.no_results_label.setVisible(
+            visible_sections == 0
+        )
+
+
+    # =========================================================
+    # THEME
+    # =========================================================
 
     def on_theme_changed(
         self,
@@ -632,6 +1183,15 @@ to close the assistant and GUI.
                 font-size: 14px;
             }}
 
+            QLineEdit {{
+                background-color: {background};
+                color: {accent};
+                border: 1px solid {accent};
+                border-radius: 7px;
+                padding: 10px;
+                font-size: 14px;
+            }}
+
             QPushButton {{
                 color: {accent};
                 background-color: transparent;
@@ -657,6 +1217,10 @@ to close the assistant and GUI.
             }}
 
             QLabel#helpHeading {{
+                color: {accent};
+            }}
+
+            QLabel#categoryHeading {{
                 color: {accent};
             }}
             """
