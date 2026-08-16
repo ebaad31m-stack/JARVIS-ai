@@ -61,7 +61,9 @@ from core.voice_output import (
 from core.wake_word import (
     wait_for_wake_word
 )
-
+from remote.api_server import (
+    start_remote_server,
+)
 
 SLEEP_COMMANDS = {
     "go to sleep",
@@ -553,7 +555,7 @@ def start_assistant():
     global email_mode
     global email_step
     global email_data
-
+    start_remote_server()
     set_state(
         "SPEAKING"
     )
