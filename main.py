@@ -37,8 +37,17 @@ class JarvisApplication:
             sys.argv
         )
 
+        self.app.setQuitOnLastWindowClosed(
+            False
+        )
+
         self.main_window = None
         self.setup_window = None
+
+        self.start_minimized = (
+            "--minimized"
+            in sys.argv
+        )
 
 
     def start(self):
@@ -61,21 +70,48 @@ class JarvisApplication:
         self.setup_window.finished.connect(
             self.launch_jarvis
         )
-        
 
         self.setup_window.show()
 
+        self.setup_window.raise_()
+
+        self.setup_window.activateWindow()
+
 
     def launch_jarvis(self):
-        if (
-            self.main_window is not None
-            and self.main_window.isVisible()
-        ):
+        if self.main_window is not None:
+            if self.main_window.isVisible():
+                return
+
+            self.main_window.showNormal()
+            self.main_window.raise_()
+            self.main_window.activateWindow()
+
             return
 
         self.main_window = JarvisWindow()
 
-        self.main_window.show()
+        # =====================================================
+        # NORMAL START
+        # =====================================================
+
+        if not self.start_minimized:
+            self.main_window.show()
+
+        # =====================================================
+        # WINDOWS STARTUP
+        # =====================================================
+
+        else:
+            self.main_window.hide()
+
+            print(
+                "JARVIS started minimized to system tray."
+            )
+
+        # =====================================================
+        # ASSISTANT THREAD
+        # =====================================================
 
         assistant_thread = threading.Thread(
             target=run_assistant,

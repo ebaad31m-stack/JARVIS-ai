@@ -1,21 +1,40 @@
 import requests
 
-from core.personality import JARVIS_PERSONALITY
-
 from core.ai_mode import (
-    get_current_model,
     get_ai_mode,
+    get_current_model,
     get_temperature
 )
 
+from core.personality import (
+    get_current_personality,
+    get_personality_display_name
+)
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
+
+OLLAMA_URL = (
+    "http://localhost:11434/api/generate"
+)
 
 
-def ask_ai(prompt):
+def ask_ai(
+    prompt
+):
     model = get_current_model()
     mode = get_ai_mode()
     temperature = get_temperature()
+
+    personality = (
+        get_current_personality()
+    )
+
+    personality_name = (
+        get_personality_display_name()
+    )
+
+    # =========================================================
+    # THINK MODE
+    # =========================================================
 
     if mode == "think":
         mode_instruction = """
@@ -32,6 +51,10 @@ Take extra care with:
 Prioritize accuracy and thoughtful analysis.
 """
 
+    # =========================================================
+    # NORMAL MODE
+    # =========================================================
+
     else:
         mode_instruction = """
 You are currently operating in NORMAL MODE.
@@ -45,8 +68,12 @@ Prioritize:
 Only expand when necessary.
 """
 
+    # =========================================================
+    # FULL PROMPT
+    # =========================================================
+
     full_prompt = f"""
-{JARVIS_PERSONALITY}
+{personality}
 
 {mode_instruction}
 
@@ -58,8 +85,14 @@ JARVIS:
 
     data = {
         "model": model,
+
         "prompt": full_prompt,
+
         "stream": False,
+
+        # Keep the normal text model loaded for a while.
+        "keep_alive": "10m",
+
         "options": {
             "temperature": temperature
         }
@@ -68,8 +101,13 @@ JARVIS:
     print(
         f"AI Mode: {mode.upper()} | "
         f"Model: {model} | "
+        f"Personality: {personality_name} | "
         f"Temperature: {temperature}"
     )
+
+    # =========================================================
+    # REQUEST
+    # =========================================================
 
     try:
         response = requests.post(
@@ -84,7 +122,10 @@ JARVIS:
 
         return (
             result
-            .get("response", "")
+            .get(
+                "response",
+                ""
+            )
             .strip()
         )
 

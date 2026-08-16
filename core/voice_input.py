@@ -5,10 +5,10 @@ recognizer = sr.Recognizer()
 
 
 def listen():
-
     with sr.Microphone() as source:
-
-        print("Listening...")
+        print(
+            "Listening..."
+        )
 
         recognizer.adjust_for_ambient_noise(
             source,
@@ -16,7 +16,6 @@ def listen():
         )
 
         try:
-
             audio = recognizer.listen(
                 source,
                 timeout=5,
@@ -24,75 +23,57 @@ def listen():
             )
 
         except sr.WaitTimeoutError:
-
             return ""
 
-
     try:
+        command = recognizer.recognize_google(
+            audio
+        )
 
-        command = recognizer.recognize_google(audio)
-
-        print("You:", command)
+        print(
+            "You:",
+            command
+        )
 
         return command
 
-
     except sr.UnknownValueError:
-
         return ""
 
-
-    except sr.RequestError:
+    except sr.RequestError as error:
+        print(
+            "Speech recognition error:",
+            error
+        )
 
         return ""
-
 
 
 def listen_for_stop():
-
     with sr.Microphone() as source:
-
-        recognizer.adjust_for_ambient_noise(
-            source,
-            duration=0.2
-        )
-
         try:
-
             audio = recognizer.listen(
                 source,
                 timeout=1,
                 phrase_time_limit=3
             )
 
-
         except sr.WaitTimeoutError:
-
-            return False
-
+            return ""
 
     try:
+        command = recognizer.recognize_google(
+            audio
+        )
 
-        command = recognizer.recognize_google(audio)
+        return (
+            command
+            .lower()
+            .strip()
+        )
 
-        command = command.lower().strip()
+    except sr.UnknownValueError:
+        return ""
 
-        print("Interrupt check:", command)
-
-
-        if command in {
-            "jarvis stop",
-            "stop",
-            "stop talking",
-            "be quiet"
-        }:
-
-            return True
-
-
-    except:
-
-        pass
-
-
-    return False
+    except sr.RequestError:
+        return ""
