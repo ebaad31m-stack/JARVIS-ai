@@ -1,5 +1,5 @@
 from core.ai_engine import ask_ai
-
+from core.settings_agent import handle_settings_command
 from core.commands import execute_command
 
 from core.command_manager import (
@@ -31,11 +31,44 @@ from core.responses import get_response
 def process(
     command
 ):
+    # =========================================================
+    # VALIDATION
+    # =========================================================
+
+    if not command:
+        return None
+
     command = (
-        command
+        str(command)
         .lower()
         .strip()
     )
+
+    if not command:
+        return None
+
+    # =========================================================
+    # WINDOWS SETTINGS AGENT
+    # =========================================================
+    #
+    # This runs early so simple settings commands execute
+    # immediately instead of waiting for the AI.
+    #
+    # Examples:
+    #
+    # "set my wallpaper to mountains"
+    # "switch windows to dark mode"
+    # "turn transparency off"
+    # "open bluetooth settings"
+    #
+    # =========================================================
+
+    settings_response = handle_settings_command(
+        command
+    )
+
+    if settings_response is not None:
+        return settings_response
 
     # =========================================================
     # MEMORY
@@ -48,6 +81,11 @@ def process(
             10:
         ].strip()
 
+        if not name:
+            return (
+                "You didn't tell me your name."
+            )
+
         remember(
             "name",
             name,
@@ -57,7 +95,11 @@ def process(
             f"I'll remember that your name is {name}."
         )
 
-    if command == "what is my name":
+    if command in (
+        "what is my name",
+        "what's my name",
+        "do you remember my name",
+    ):
         name = recall(
             "name"
         )
@@ -181,6 +223,7 @@ def process(
     )
 
     for prefix in macro_prefixes:
+
         if macro_name.startswith(
             prefix
         ):
@@ -192,7 +235,6 @@ def process(
                 possible_name
             ):
                 macro_name = possible_name
-
                 break
 
     if macro_exists(
@@ -225,6 +267,7 @@ def process(
     )
 
     for prefix in custom_prefixes:
+
         if custom_name.startswith(
             prefix
         ):
@@ -236,7 +279,6 @@ def process(
                 possible_name
             ):
                 custom_name = possible_name
-
                 break
 
     if command_exists(
@@ -247,7 +289,12 @@ def process(
         )
 
     # =========================================================
-    # NORMAL COMMANDS
+    # NORMAL FAST COMMANDS
+    # =========================================================
+    #
+    # App opening, closing, system commands, etc.
+    # should still happen before asking the AI.
+    #
     # =========================================================
 
     response = execute_command(
@@ -270,6 +317,11 @@ def process(
 
     # =========================================================
     # AI FALLBACK
+    # =========================================================
+    #
+    # Only requests that weren't handled by one of JARVIS's
+    # fast tools reach the AI.
+    #
     # =========================================================
 
     return ask_ai(
