@@ -2,6 +2,10 @@ from core.ai_engine import ask_ai
 from core.settings_agent import handle_settings_command
 from core.commands import execute_command
 
+from core.action_manager import (
+    handle_action_command,
+)
+
 from core.command_manager import (
     command_exists,
     list_commands,
@@ -48,23 +52,38 @@ def process(
         return None
 
     # =========================================================
-    # WINDOWS SETTINGS AGENT
+    # ACTION / CONFIRMATION ENGINE
     # =========================================================
     #
-    # This runs early so simple settings commands execute
-    # immediately instead of waiting for the AI.
+    # Handles:
     #
-    # Examples:
+    # "yes"
+    # "do it"
+    # "cancel"
+    # "do the first one"
+    # "choose option 2"
     #
-    # "set my wallpaper to mountains"
-    # "switch windows to dark mode"
-    # "turn transparency off"
-    # "open bluetooth settings"
+    # before anything gets sent to AI.
     #
     # =========================================================
 
-    settings_response = handle_settings_command(
-        command
+    action_response = (
+        handle_action_command(
+            command
+        )
+    )
+
+    if action_response is not None:
+        return action_response
+
+    # =========================================================
+    # WINDOWS SETTINGS AGENT
+    # =========================================================
+
+    settings_response = (
+        handle_settings_command(
+            command
+        )
     )
 
     if settings_response is not None:
@@ -82,6 +101,7 @@ def process(
         ].strip()
 
         if not name:
+
             return (
                 "You didn't tell me your name."
             )
@@ -105,6 +125,7 @@ def process(
         )
 
         if name:
+
             return (
                 f"Your name is {name}."
             )
@@ -123,6 +144,7 @@ def process(
         "test overlay",
         "test the overlay",
     ):
+
         show_overlay_message(
             "JARVIS screen overlay active.",
             5000,
@@ -138,6 +160,7 @@ def process(
         "highlight middle",
         "highlight the middle",
     ):
+
         highlight_center(
             "Look here",
             5000,
@@ -154,6 +177,7 @@ def process(
         "remove overlay",
         "hide overlay",
     ):
+
         clear_overlay()
 
         return (
@@ -169,11 +193,14 @@ def process(
         "show macros",
         "what macros do i have",
     ):
+
         macros = list_macros()
 
         if not macros:
+
             return (
-                "You don't have any macros configured."
+                "You don't have any "
+                "macros configured."
             )
 
         return (
@@ -194,9 +221,11 @@ def process(
         "what custom commands do i have",
         "what commands did i create",
     ):
+
         commands = list_commands()
 
         if not commands:
+
             return (
                 "You don't have any "
                 "custom commands configured."
@@ -227,31 +256,42 @@ def process(
         if macro_name.startswith(
             prefix
         ):
-            possible_name = macro_name[
-                len(prefix):
-            ].strip()
+
+            possible_name = (
+                macro_name[
+                    len(prefix):
+                ]
+                .strip()
+            )
 
             if macro_exists(
                 possible_name
             ):
-                macro_name = possible_name
+
+                macro_name = (
+                    possible_name
+                )
+
                 break
 
     if macro_exists(
         macro_name
     ):
+
         result = run_macro(
             macro_name
         )
 
         if result:
+
             return (
                 f"Activating {macro_name}."
             )
 
         return (
             f"I found {macro_name}, "
-            "but one or more actions could not run."
+            "but one or more actions "
+            "could not run."
         )
 
     # =========================================================
@@ -271,30 +311,34 @@ def process(
         if custom_name.startswith(
             prefix
         ):
-            possible_name = custom_name[
-                len(prefix):
-            ].strip()
+
+            possible_name = (
+                custom_name[
+                    len(prefix):
+                ]
+                .strip()
+            )
 
             if command_exists(
                 possible_name
             ):
-                custom_name = possible_name
+
+                custom_name = (
+                    possible_name
+                )
+
                 break
 
     if command_exists(
         custom_name
     ):
+
         return run_command(
             custom_name
         )
 
     # =========================================================
-    # NORMAL FAST COMMANDS
-    # =========================================================
-    #
-    # App opening, closing, system commands, etc.
-    # should still happen before asking the AI.
-    #
+    # FAST NORMAL COMMANDS
     # =========================================================
 
     response = execute_command(
@@ -317,11 +361,6 @@ def process(
 
     # =========================================================
     # AI FALLBACK
-    # =========================================================
-    #
-    # Only requests that weren't handled by one of JARVIS's
-    # fast tools reach the AI.
-    #
     # =========================================================
 
     return ask_ai(
