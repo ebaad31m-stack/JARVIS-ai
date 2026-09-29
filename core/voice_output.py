@@ -10,7 +10,9 @@ import soundfile as sf
 
 from core.paths import resource_file
 from core.voice_settings import load_voice_settings
-
+from core.personalization import (
+    apply_phrase_override,
+)
 
 playback_lock = threading.Lock()
 
@@ -48,6 +50,8 @@ def stop_voice():
 def speak(
     text
 ):
+    text = apply_phrase_override(text)
+
     if not text:
         return
 

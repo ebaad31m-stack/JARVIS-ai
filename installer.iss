@@ -4,45 +4,37 @@
 #define MyAppExeName "JARVIS.exe"
 
 [Setup]
-AppId={{7B7C28D2-EB44-4F40-9BB9-61EB72A58761}
+AppId={{7C3A8E7F-4D0A-4C8D-9B9F-JARVIS1000}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 
-DefaultDirName={localappdata}\Programs\JARVIS
+DefaultDirName={autopf}\JARVIS
 DefaultGroupName=JARVIS
 
 OutputDir=C:\JARVIS\installer_output
-OutputBaseFilename=JARVIS-Setup
+OutputBaseFilename=JARVIS_Setup
 
-Compression=lzma2
+Compression=lzma
 SolidCompression=yes
-
-PrivilegesRequired=lowest
-
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
 
 WizardStyle=modern
 
-UninstallDisplayName=JARVIS
+PrivilegesRequired=admin
+
 UninstallDisplayIcon={app}\JARVIS.exe
 
-CloseApplications=yes
-RestartApplications=no
-
-SetupLogging=yes
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 Source: "C:\JARVIS\dist\JARVIS\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\JARVIS"; Filename: "{app}\JARVIS.exe"
-Name: "{autodesktop}\JARVIS"; Filename: "{app}\JARVIS.exe"; Tasks: desktopicon
-
-[Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "{autoprograms}\JARVIS"; Filename: "{app}\JARVIS.exe"
+Name: "{autodesktop}\JARVIS"; Filename: "{app}\JARVIS.exe"
 
 [Run]
 Filename: "{app}\JARVIS.exe"; Description: "Launch JARVIS"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

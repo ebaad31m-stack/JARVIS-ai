@@ -2,7 +2,9 @@ import json
 import os
 
 from core.paths import user_file
-
+from core.personalization import (
+    get_assistant_name,
+)
 
 PERSONALITY_SETTINGS_FILE = user_file(
     "personality_settings.json"
@@ -334,6 +336,16 @@ def get_current_personality():
             "Additional User Personality Instructions:\n"
             f"{custom_instructions}"
         )
+    assistant_name = (
+        get_assistant_name()
+    )
+
+    base_prompt += (
+        "\n\n"
+        "ASSISTANT IDENTITY:\n"
+        f"Your name is {assistant_name}.\n"
+        "Use this name when referring to yourself."
+    )
 
     return base_prompt
 

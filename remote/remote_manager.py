@@ -1,146 +1,203 @@
+from __future__ import annotations
+
 import threading
 
-
-REMOTE_COMMAND_LOCK = (
-    threading.Lock()
+from core.action_manager import (
+    get_action_state,
 )
 
+from core.agent_router import (
+    build_agent_request,
+)
+
+from core.suggestion_engine import (
+    generate_suggestions,
+)
+
+
+REMOTE_COMMAND_LOCK = threading.RLock()
 
 MAX_COMMAND_LENGTH = 2000
 
 
-# =========================================================
-# AI MODE PHRASES
-# =========================================================
-
-NORMAL_MODE_COMMANDS = {
+NORMAL_MODE_PHRASES = {
     "normal mode",
-    "jarvis normal mode",
     "switch to normal mode",
     "use normal mode",
+    "normal ai mode",
 }
 
 
-THINK_MODE_COMMANDS = {
+THINK_MODE_PHRASES = {
     "think mode",
-    "thinking mode",
-    "jarvis think mode",
-    "jarvis thinking mode",
     "switch to think mode",
-    "switch to thinking mode",
     "use think mode",
+    "thinking mode",
 }
 
-
-# =========================================================
-# BLOCK HIGH-RISK REMOTE COMMANDS FOR VERSION 1
-# =========================================================
 
 BLOCKED_REMOTE_COMMANDS = {
     "exit",
-    "jarvis exit",
+    "quit",
+    "close jarvis",
     "shutdown jarvis",
-    "shut down jarvis",
-
-    "shutdown my computer",
-    "shut down my computer",
-    "shutdown the computer",
-    "shut down the computer",
-    "turn off my computer",
-    "turn off the computer",
-    "shutdown my pc",
-    "shut down my pc",
-    "turn off my pc",
-
+    "stop jarvis",
+    "shutdown pc",
+    "shut down pc",
+    "shutdown computer",
+    "shut down computer",
+    "turn off pc",
+    "turn off computer",
     "confirm shutdown",
 }
 
 
-# =========================================================
-# NORMALIZE
-# =========================================================
-
 def normalize_remote_command(
-    command
-):
-    command = str(
-        command
-    ).strip()
+    command: str,
+) -> str:
+    text = (
+        str(command)
+        .strip()
+    )
 
     lowered = (
-        command
+        text
         .lower()
         .strip()
     )
 
     prefixes = (
-        "hey jarvis, ",
+        "hey jarvis,",
+        "hey jarvis:",
         "hey jarvis ",
-        "jarvis, ",
+        "jarvis,",
+        "jarvis:",
         "jarvis ",
     )
 
     for prefix in prefixes:
-        if lowered.startswith(
-            prefix
-        ):
-            command = command[
-                len(
-                    prefix
-                ):
-            ].strip()
-
+        if lowered.startswith(prefix):
+            text = (
+                text[
+                    len(prefix):
+                ]
+                .strip()
+            )
             break
 
-    return command
+    return text
 
 
-# =========================================================
-# DESKTOP AGENT
-# =========================================================
+def _finalize_response(
+    command: str,
+    response,
+) -> str:
+    if response is None:
+        response = ""
+
+    response_text = str(
+        response
+    )
+
+    try:
+        generate_suggestions(
+            command,
+            response_text,
+        )
+
+    except Exception as error:
+        print(
+            "[Remote] Suggestion generation failed:",
+            error,
+        )
+
+    return response_text
+
+
+def _coding_language_from_request(
+    prompt: str,
+) -> str:
+    text = (
+        str(prompt or "")
+        .lower()
+    )
+
+    if (
+        "typescript" in text
+        or " ts " in f" {text} "
+    ):
+        return "typescript"
+
+    if (
+        "javascript" in text
+        or "node.js" in text
+        or "nodejs" in text
+    ):
+        return "javascript"
+
+    if (
+        "html" in text
+        and "css" not in text
+        and "javascript" not in text
+    ):
+        return "html"
+
+    if "css" in text:
+        return "css"
+
+    if "sql" in text:
+        return "sql"
+
+    if (
+        "powershell" in text
+        or "power shell" in text
+    ):
+        return "powershell"
+
+    return "python"
+
 
 def handle_remote_agent_request(
-    request
-):
-    from core.ai_engine import (
-        ask_ai,
-    )
+    request: dict,
+) -> str | None:
 
-    from core.coding_agent import (
-        create_project_from_response,
-    )
-
-    from core.desktop_agent import (
-        paste_text,
-    )
-
-    if not isinstance(
-        request,
-        dict,
-    ):
+    if not request:
         return None
 
-    kind = request.get(
-        "kind"
-    )
-
-    # =====================================================
-    # MESSAGE
-    # =====================================================
-
-    if kind == "message":
-        return str(
+    # The modern agent router uses "kind".
+    # Older remote code used "type".
+    request_type = str(
+        request.get(
+            "kind",
             request.get(
-                "message",
-                "I couldn't complete that request.",
-            )
+                "type",
+                "",
+            ),
         )
+    ).lower().strip()
+
+    # =====================================================
+    # SIMPLE MESSAGE
+    # =====================================================
+
+    if request_type == "message":
+        message = request.get(
+            "message",
+            "",
+        )
+
+        if message:
+            return str(
+                message
+            )
+
+        return None
 
     # =====================================================
     # LITERAL PASTE
     # =====================================================
 
-    if kind == "literal_paste":
+    if request_type == "literal_paste":
         text = str(
             request.get(
                 "text",
@@ -149,227 +206,324 @@ def handle_remote_agent_request(
         )
 
         if not text:
-            return (
-                "There was no text to type."
+            return "There was nothing to paste."
+
+        try:
+            from core.desktop_agent import (
+                paste_text,
             )
 
-        if paste_text(
-            text
-        ):
-            return (
-                "Done, sir."
+            paste_text(
+                text
             )
 
-        return (
-            "I couldn't type into "
-            "the active window."
+            return "Done. I pasted it."
+
+        except Exception as error:
+            return (
+                "I couldn't paste that: "
+                f"{error}"
+            )
+
+    # =====================================================
+    # AI PASTE
+    # =====================================================
+
+    if request_type == "paste_ai":
+        prompt = str(
+            request.get(
+                "prompt",
+                "",
+            )
         )
 
-    # =====================================================
-    # AI AGENT TYPES
-    # =====================================================
+        if not prompt:
+            return (
+                "I need something to "
+                "generate first."
+            )
 
-    if kind not in {
-        "paste_ai",
-        "speak_ai",
-        "project",
-    }:
-        return None
+        try:
+            from core.ai_engine import (
+                ask_ai,
+            )
 
-    prompt = str(
-        request.get(
-            "prompt",
-            "",
-        )
-    ).strip()
+            from core.desktop_agent import (
+                paste_text,
+            )
 
-    if not prompt:
-        return (
-            "The request didn't contain "
-            "an AI prompt."
-        )
+            result = ask_ai(
+                prompt
+            )
 
-    generated = ask_ai(
-        prompt
-    )
+            paste_text(
+                str(result)
+            )
 
-    if not generated:
-        return (
-            "I couldn't generate "
-            "the requested content."
-        )
-
-    # =====================================================
-    # RETURN AI TEXT TO PHONE
-    # =====================================================
-
-    if kind == "speak_ai":
-        return str(
-            generated
-        )
-
-    # =====================================================
-    # PASTE INTO PC
-    # =====================================================
-
-    if kind == "paste_ai":
-        if paste_text(
-            generated
-        ):
             return str(
-                request.get(
-                    "success_message",
-                    "Done, sir.",
+                result
+            )
+
+        except Exception as error:
+            return (
+                "I couldn't generate "
+                "and paste that: "
+                f"{error}"
+            )
+
+    # =====================================================
+    # SPEAK AI
+    # =====================================================
+
+    if request_type == "speak_ai":
+        prompt = str(
+            request.get(
+                "prompt",
+                "",
+            )
+        )
+
+        if not prompt:
+            return None
+
+        try:
+            from core.ai_engine import (
+                ask_ai,
+            )
+
+            return str(
+                ask_ai(
+                    prompt
                 )
             )
 
-        return (
-            "I generated the content, "
-            "but I couldn't paste it "
-            "into the active PC window."
-        )
+        except Exception as error:
+            return (
+                "I couldn't answer that: "
+                f"{error}"
+            )
 
     # =====================================================
-    # PROJECT
+    # DEDICATED CODING AGENT
     # =====================================================
 
-    success, message = (
-        create_project_from_response(
-            generated
-        )
-    )
+    if request_type in {
+        "coding_project",
+        "project",
+    }:
+        prompt = str(
+            request.get(
+                "prompt",
+                "",
+            )
+        ).strip()
 
-    return str(
-        message
-    )
+        if not prompt:
+            return None
 
+        try:
+            from core.coding_agent import (
+                create_project_from_prompt,
+            )
 
-# =========================================================
-# EXECUTE REMOTE COMMAND
-# =========================================================
+            result = create_project_from_prompt(
+                prompt,
+                open_project=True,
+            )
+
+            message = str(
+                getattr(
+                    result,
+                    "message",
+                    "Coding task completed.",
+                )
+            )
+
+            if getattr(
+                result,
+                "success",
+                False,
+            ):
+                return message
+
+            return (
+                "The Coding Agent finished, "
+                "but it found a problem. "
+                + message
+            )
+
+        except Exception as error:
+            return (
+                "I couldn't process that coding "
+                "project: "
+                f"{error}"
+            )
+
+    if request_type == "coding_script":
+        prompt = str(
+            request.get(
+                "prompt",
+                "",
+            )
+        ).strip()
+
+        if not prompt:
+            return None
+
+        try:
+            from core.coding_agent import (
+                write_script_from_prompt,
+            )
+
+            result = write_script_from_prompt(
+                prompt,
+                language=_coding_language_from_request(
+                    prompt
+                ),
+            )
+
+            message = str(
+                getattr(
+                    result,
+                    "message",
+                    "Coding task completed.",
+                )
+            )
+
+            if getattr(
+                result,
+                "success",
+                False,
+            ):
+                return message
+
+            return (
+                "The Coding Agent finished, "
+                "but it found a problem. "
+                + message
+            )
+
+        except Exception as error:
+            return (
+                "I couldn't process that coding "
+                "task: "
+                f"{error}"
+            )
+
+    return None
+
 
 def execute_remote_command(
-    raw_command
-):
-    command = (
-        normalize_remote_command(
-            raw_command
-        )
-    )
+    command: str,
+) -> str:
 
-    if not command:
-        return (
-            "Enter a command first."
-        )
-
-    if len(
-        command
-    ) > MAX_COMMAND_LENGTH:
-        return (
-            "That command is too long."
-        )
-
-    lowered = (
-        command
-        .lower()
-        .strip()
-    )
-
-    # Only process one phone command at a time.
     with REMOTE_COMMAND_LOCK:
 
-        # =====================================================
-        # HIGH-RISK COMMANDS
-        # =====================================================
+        command = normalize_remote_command(
+            command
+        )
+
+        if not command:
+            return "Send me a command first."
+
+        if len(command) > MAX_COMMAND_LENGTH:
+            return "That command is too long."
+
+        lowered = (
+            command
+            .lower()
+            .strip()
+        )
+
+        # =================================================
+        # SAFETY
+        # =================================================
 
         if lowered in BLOCKED_REMOTE_COMMANDS:
             return (
-                "Remote PC shutdown and JARVIS exit "
-                "are disabled in this version for safety."
+                "That command isn't available "
+                "through the remote connection."
             )
 
-        # =====================================================
+        # =================================================
         # AI MODE
-        # =====================================================
+        # =================================================
 
-        if lowered in NORMAL_MODE_COMMANDS:
-            from core.ai_mode import (
-                get_ai_mode,
-                set_ai_mode,
-            )
-
-            if (
-                get_ai_mode()
-                == "normal"
-            ):
-                return (
-                    "Normal mode is already active."
+        if lowered in NORMAL_MODE_PHRASES:
+            try:
+                from core.ai_engine import (
+                    set_ai_mode,
                 )
 
-            set_ai_mode(
-                "normal"
-            )
-
-            return (
-                "Normal mode activated."
-            )
-
-        if lowered in THINK_MODE_COMMANDS:
-            from core.ai_mode import (
-                get_ai_mode,
-                set_ai_mode,
-            )
-
-            if (
-                get_ai_mode()
-                == "think"
-            ):
-                return (
-                    "Think mode is already active."
+                set_ai_mode(
+                    "normal"
                 )
 
-            set_ai_mode(
-                "think"
-            )
+                return _finalize_response(
+                    command,
+                    "Normal AI mode is active.",
+                )
 
-            return (
-                "Think mode activated."
-            )
+            except Exception:
+                return _finalize_response(
+                    command,
+                    "Normal mode requested.",
+                )
 
-        # =====================================================
-        # DESKTOP AGENT
-        # =====================================================
+        if lowered in THINK_MODE_PHRASES:
+            try:
+                from core.ai_engine import (
+                    set_ai_mode,
+                )
+
+                set_ai_mode(
+                    "think"
+                )
+
+                return _finalize_response(
+                    command,
+                    "Think mode is active.",
+                )
+
+            except Exception:
+                return _finalize_response(
+                    command,
+                    "Think mode requested.",
+                )
+
+        # =================================================
+        # AGENT ROUTER
+        # =================================================
 
         try:
-            from core.agent_router import (
-                build_agent_request,
+            agent_request = build_agent_request(
+                command
             )
-
-            agent_request = (
-                build_agent_request(
-                    command
-                )
-            )
-
-            if agent_request is not None:
-                agent_response = (
-                    handle_remote_agent_request(
-                        agent_request
-                    )
-                )
-
-                if agent_response is not None:
-                    return agent_response
 
         except Exception as error:
             print(
-                "Remote desktop-agent error:",
+                "[Remote] Agent router error:",
                 error,
             )
 
-        # =====================================================
+            agent_request = None
+
+        if agent_request:
+            agent_response = (
+                handle_remote_agent_request(
+                    agent_request
+                )
+            )
+
+            if agent_response is not None:
+                return _finalize_response(
+                    command,
+                    agent_response,
+                )
+
+        # =================================================
         # NORMAL JARVIS ROUTER
-        # =====================================================
+        # =================================================
 
         try:
             from core.intent_router import (
@@ -377,27 +531,31 @@ def execute_remote_command(
             )
 
             response = process(
-                lowered
-            )
-
-            if response is None:
-                return (
-                    "Command completed."
-                )
-
-            return str(
-                response
+                command
             )
 
         except Exception as error:
-            print(
-                "Remote command error:",
-                repr(
-                    error
+            return _finalize_response(
+                command,
+                (
+                    "I couldn't run that command: "
+                    f"{error}"
                 ),
             )
 
-            return (
-                "JARVIS encountered an error "
-                "while processing the remote command."
-            )
+        return _finalize_response(
+            command,
+            response,
+        )
+
+
+def get_remote_action_state() -> dict:
+
+    try:
+        return get_action_state()
+
+    except Exception:
+        return {
+            "pending": None,
+            "suggestions": [],
+        }

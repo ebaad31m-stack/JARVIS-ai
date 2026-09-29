@@ -1,15 +1,20 @@
-import html
+from __future__ import annotations
+
 import ipaddress
 import secrets
-import socket
 import threading
 
 from flask import (
     Flask,
+    jsonify,
     request,
 )
 
 from waitress import serve
+
+from core.action_manager import (
+    get_action_state,
+)
 
 from remote.remote_manager import (
     execute_remote_command,
@@ -18,11 +23,10 @@ from remote.remote_manager import (
 from remote.remote_settings import (
     get_pairing_info,
     load_remote_settings,
-    print_pairing_info,
 )
 
 
-SERVER_VERSION = "1.0"
+SERVER_VERSION = "1.1"
 
 
 app = Flask(
@@ -30,71 +34,65 @@ app = Flask(
 )
 
 
+_server_thread = None
+
 _server_lock = (
     threading.Lock()
 )
 
-_server_started = False
-
 
 # =========================================================
-# CLIENT ADDRESS
+# NETWORK SAFETY
 # =========================================================
 
-def get_client_address():
+def _client_is_local() -> bool:
+
     address = (
         request.remote_addr
         or ""
     )
 
     try:
-        return ipaddress.ip_address(
+
+        ip = ipaddress.ip_address(
             address
         )
 
-    except Exception:
-        return None
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+        )
+
+    except ValueError:
+        return False
 
 
-# =========================================================
-# LAN ONLY
-# =========================================================
+def _reject_non_local():
 
-@app.before_request
-def restrict_to_local_network():
-    address = (
-        get_client_address()
-    )
+    if not _client_is_local():
 
-    if address is None:
-        return {
-            "ok": False,
-            "error":
-                "Invalid client address.",
-        }, 403
-
-    allowed = (
-        address.is_private
-        or address.is_loopback
-        or address.is_link_local
-    )
-
-    if not allowed:
-        return {
-            "ok": False,
-            "error":
-                "JARVIS Remote is available "
-                "only on the local network.",
-        }, 403
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error":
+                        "JARVIS Remote only accepts "
+                        "local network connections.",
+                }
+            ),
+            403,
+        )
 
     return None
 
 
 # =========================================================
-# AUTH
+# AUTHENTICATION
 # =========================================================
 
-def request_is_authorized():
+def _authorized() -> bool:
+
     settings = (
         load_remote_settings()
     )
@@ -119,72 +117,122 @@ def request_is_authorized():
     if not supplied_token:
         return False
 
-    try:
-        return secrets.compare_digest(
-            expected_token,
-            supplied_token,
+    return secrets.compare_digest(
+        supplied_token,
+        expected_token,
+    )
+
+
+def _require_auth():
+
+    local_error = (
+        _reject_non_local()
+    )
+
+    if local_error is not None:
+        return local_error
+
+    if not _authorized():
+
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error":
+                        "Invalid JARVIS pairing token.",
+                }
+            ),
+            401,
         )
 
-    except Exception:
-        return False
-
-
-def unauthorized_response():
-    return {
-        "ok": False,
-        "error":
-            "Invalid JARVIS pairing token.",
-    }, 401
+    return None
 
 
 # =========================================================
-# ROOT
+# HOME
 # =========================================================
 
-@app.get("/")
-def root():
-    return {
-        "ok": True,
-        "name": "JARVIS Remote API",
-        "version": SERVER_VERSION,
-    }
+@app.route(
+    "/",
+    methods=["GET"],
+)
+def home():
+
+    local_error = (
+        _reject_non_local()
+    )
+
+    if local_error is not None:
+        return local_error
+
+    return jsonify(
+        {
+            "ok": True,
+            "name": "JARVIS Remote API",
+            "version": SERVER_VERSION,
+        }
+    )
 
 
 # =========================================================
 # PING
 # =========================================================
 
-@app.get("/api/ping")
+@app.route(
+    "/api/ping",
+    methods=["GET"],
+)
 def ping():
-    return {
-        "ok": True,
-        "name": "JARVIS",
-        "message":
-            "JARVIS Remote is online.",
-        "version":
-            SERVER_VERSION,
-    }
+
+    local_error = (
+        _reject_non_local()
+    )
+
+    if local_error is not None:
+        return local_error
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "JARVIS is reachable.",
+            "version": SERVER_VERSION,
+        }
+    )
 
 
 # =========================================================
 # PAIRING PAGE
 # =========================================================
 
-@app.get("/pair")
-def pairing_page():
+@app.route(
+    "/pair",
+    methods=["GET"],
+)
+def pair():
+
     address = (
-        get_client_address()
+        request.remote_addr
+        or ""
     )
 
-    # Pairing code is visible only from
-    # the PC itself.
-    if (
-        address is None
-        or not address.is_loopback
-    ):
+    try:
+
+        ip = ipaddress.ip_address(
+            address
+        )
+
+    except ValueError:
+
         return (
-            "Pairing information can only "
-            "be viewed from the JARVIS PC.",
+            "Invalid request.",
+            403,
+        )
+
+    if not ip.is_loopback:
+
+        return (
+            "The pairing page can only "
+            "be opened on the JARVIS PC.",
             403,
         )
 
@@ -192,344 +240,323 @@ def pairing_page():
         get_pairing_info()
     )
 
-    safe_ip = html.escape(
-        str(
-            info[
-                "ip"
-            ]
+    pc_ip = (
+        info.get(
+            "ip",
+            ""
         )
     )
 
-    safe_port = html.escape(
-        str(
-            info[
-                "port"
-            ]
+    port = (
+        info.get(
+            "port",
+            8765,
         )
     )
 
-    safe_token = html.escape(
-        str(
-            info[
-                "token"
-            ]
+    token = (
+        info.get(
+            "token",
+            ""
         )
     )
 
     return f"""
-    <!doctype html>
-
+    <!DOCTYPE html>
     <html>
-        <head>
-            <meta charset="utf-8">
+    <head>
+        <title>JARVIS Pairing</title>
+        <meta charset="utf-8">
 
-            <title>
-                JARVIS Companion Pairing
-            </title>
+        <style>
+            body {{
+                background: #080c12;
+                color: #e8f7ff;
+                font-family:
+                    Segoe UI,
+                    Arial,
+                    sans-serif;
+                padding: 40px;
+            }}
 
-            <style>
-                body {{
-                    background: #080b10;
-                    color: #42e8ff;
-                    font-family:
-                        Segoe UI,
-                        Arial,
-                        sans-serif;
-                    max-width: 700px;
-                    margin: 80px auto;
-                    padding: 30px;
-                }}
+            .card {{
+                max-width: 700px;
+                margin: auto;
+                padding: 30px;
+                border-radius: 18px;
+                background: #101824;
+                border: 1px solid #1d89b8;
+            }}
 
-                .card {{
-                    border:
-                        1px solid
-                        #42e8ff;
+            h1 {{
+                color: #5edbff;
+            }}
 
-                    border-radius:
-                        16px;
+            .value {{
+                padding: 12px;
+                margin-top: 8px;
+                border-radius: 8px;
+                background: #071018;
+                font-family: Consolas, monospace;
+                word-break: break-all;
+            }}
 
-                    padding:
-                        30px;
+            .warning {{
+                margin-top: 25px;
+                color: #ffcf67;
+            }}
+        </style>
+    </head>
 
-                    box-shadow:
-                        0 0 30px
-                        rgba(
-                            66,
-                            232,
-                            255,
-                            0.20
-                        );
-                }}
+    <body>
 
-                h1 {{
-                    margin-top: 0;
-                }}
+        <div class="card">
 
-                code {{
-                    color: white;
-                    font-size: 18px;
-                    word-break:
-                        break-all;
-                }}
+            <h1>JARVIS Companion Pairing</h1>
 
-                .warning {{
-                    margin-top: 25px;
-                    color: #bbbbbb;
-                }}
-            </style>
-        </head>
-
-        <body>
-            <div class="card">
-
-                <h1>
-                    JARVIS COMPANION
-                </h1>
-
-                <p>
-                    PC IP
-                </p>
-
-                <code>
-                    {safe_ip}
-                </code>
-
-                <p>
-                    Port
-                </p>
-
-                <code>
-                    {safe_port}
-                </code>
-
-                <p>
-                    Pairing Token
-                </p>
-
-                <code>
-                    {safe_token}
-                </code>
-
-                <p class="warning">
-                    Keep this token private.
-                    Enter it only in your
-                    JARVIS Companion app.
-                </p>
-
+            <p>PC IP</p>
+            <div class="value">
+                {pc_ip}
             </div>
-        </body>
+
+            <p>Port</p>
+            <div class="value">
+                {port}
+            </div>
+
+            <p>Pairing Token</p>
+            <div class="value">
+                {token}
+            </div>
+
+            <p class="warning">
+                Keep your pairing token private.
+            </p>
+
+        </div>
+
+    </body>
     </html>
     """
 
 
 # =========================================================
-# AUTHENTICATED STATUS
+# STATUS
 # =========================================================
 
-@app.get("/api/status")
+@app.route(
+    "/api/status",
+    methods=["GET"],
+)
 def status():
-    if not request_is_authorized():
-        return unauthorized_response()
 
-    settings = (
-        load_remote_settings()
+    auth_error = (
+        _require_auth()
     )
 
-    info = (
-        get_pairing_info()
+    if auth_error is not None:
+        return auth_error
+
+    action_state = (
+        get_action_state()
     )
 
-    return {
-        "ok": True,
+    return jsonify(
+        {
+            "ok": True,
+            "message":
+                "Connected to JARVIS.",
 
-        "name":
-            "JARVIS",
+            "version":
+                SERVER_VERSION,
 
-        "message":
-            "Connected to JARVIS.",
+            "suggestions":
+                action_state.get(
+                    "suggestions",
+                    [],
+                ),
 
-        "hostname":
-            socket.gethostname(),
-
-        "ip":
-            info[
-                "ip"
-            ],
-
-        "port":
-            settings[
-                "port"
-            ],
-
-        "version":
-            SERVER_VERSION,
-    }
+            "pending_action":
+                action_state.get(
+                    "pending",
+                ),
+        }
+    )
 
 
 # =========================================================
-# COMMAND ENDPOINT
+# COMMAND
 # =========================================================
 
-@app.post("/api/command")
+@app.route(
+    "/api/command",
+    methods=["POST"],
+)
 def command():
-    if not request_is_authorized():
-        return unauthorized_response()
 
-    payload = (
+    auth_error = (
+        _require_auth()
+    )
+
+    if auth_error is not None:
+        return auth_error
+
+    data = (
         request.get_json(
             silent=True
         )
         or {}
     )
 
-    if not isinstance(
-        payload,
-        dict,
-    ):
-        return {
-            "ok": False,
-            "error":
-                "Invalid JSON request.",
-        }, 400
-
-    raw_command = str(
-        payload.get(
+    command_text = str(
+        data.get(
             "command",
             "",
         )
     ).strip()
 
-    if not raw_command:
-        return {
-            "ok": False,
-            "error":
-                "Command is required.",
-        }, 400
+    if not command_text:
+
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error":
+                        "Command is required.",
+                }
+            ),
+            400,
+        )
 
     try:
+
         response = (
             execute_remote_command(
-                raw_command
+                command_text
             )
         )
 
-        return {
-            "ok": True,
-
-            "command":
-                raw_command,
-
-            "response":
-                str(
-                    response
-                ),
-        }
-
-    except Exception as error:
-        print(
-            "Remote API command error:",
-            repr(
-                error
-            ),
+        action_state = (
+            get_action_state()
         )
 
-        return {
-            "ok": False,
-            "error":
-                "JARVIS could not process "
-                "the command.",
-        }, 500
+        return jsonify(
+            {
+                "ok": True,
+
+                "response":
+                    response,
+
+                "suggestions":
+                    action_state.get(
+                        "suggestions",
+                        [],
+                    ),
+
+                "pending_action":
+                    action_state.get(
+                        "pending",
+                    ),
+            }
+        )
+
+    except Exception as error:
+
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error":
+                        str(error),
+                }
+            ),
+            500,
+        )
 
 
 # =========================================================
-# SERVER THREAD
+# SERVER
 # =========================================================
 
 def _server_worker(
-    host,
-    port,
+    host: str,
+    port: int,
 ):
-    global _server_started
 
-    try:
-        print_pairing_info()
-
-        print(
-            f"JARVIS Remote server "
-            f"listening on port {port}."
-        )
-
-        serve(
-            app,
-            host=host,
-            port=port,
-            threads=4,
-        )
-
-    except Exception as error:
-        print(
-            "JARVIS Remote server error:",
-            repr(
-                error
-            ),
-        )
-
-    finally:
-        with _server_lock:
-            _server_started = False
-
-
-# =========================================================
-# START
-# =========================================================
-
-def start_remote_server():
-    global _server_started
-
-    settings = (
-        load_remote_settings()
+    print(
+        f"[Remote] JARVIS API running on "
+        f"{host}:{port}"
     )
 
-    if not settings.get(
-        "enabled",
-        True,
-    ):
-        print(
-            "JARVIS Remote is disabled."
-        )
-
-        return False
-
-    host = str(
-        settings.get(
-            "host",
-            "0.0.0.0",
-        )
+    serve(
+        app,
+        host=host,
+        port=port,
+        threads=4,
     )
 
-    port = int(
-        settings.get(
-            "port",
-            8765,
-        )
-    )
+
+def start_remote_server() -> bool:
+
+    global _server_thread
 
     with _server_lock:
-        if _server_started:
+
+        if (
+            _server_thread is not None
+            and _server_thread.is_alive()
+        ):
             return True
 
-        _server_started = True
+        settings = (
+            load_remote_settings()
+        )
 
-    thread = threading.Thread(
-        target=_server_worker,
-        args=(
-            host,
-            port,
-        ),
-        daemon=True,
-        name="JARVIS-Remote-API",
-    )
+        enabled = bool(
+            settings.get(
+                "enabled",
+                True,
+            )
+        )
 
-    thread.start()
+        if not enabled:
 
-    return True
+            print(
+                "[Remote] Remote server disabled."
+            )
+
+            return False
+
+        host = str(
+            settings.get(
+                "host",
+                "0.0.0.0",
+            )
+        )
+
+        try:
+
+            port = int(
+                settings.get(
+                    "port",
+                    8765,
+                )
+            )
+
+        except Exception:
+
+            port = 8765
+
+        _server_thread = threading.Thread(
+            target=_server_worker,
+            args=(
+                host,
+                port,
+            ),
+            daemon=True,
+            name="JARVIS-Remote-API",
+        )
+
+        _server_thread.start()
+
+        return True

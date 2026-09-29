@@ -32,3 +32,15 @@ Output/
 .DS_Store
 Thumbs.db
 desktop.ini
+# Build and local environment
+.venv/
+build/
+dist/
+installer_output/
+*.spec
+
+# Large local Piper models
+piper/*.onnx
+
+# Local exported conversation artifacts
+piper/*Architecture Milestone*

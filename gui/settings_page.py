@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -56,6 +57,16 @@ from core.personality import (
     save_personality_settings,
 )
 
+from core.personalization import (
+    WAKE_MODELS,
+    get_assistant_name,
+    get_custom_wake_model_path,
+    get_phrase,
+    get_wake_model,
+    get_wake_phrase,
+    load_personalization,
+    save_personalization,
+)
 from core.startup_manager import (
     apply_startup_settings,
     is_windows_startup_enabled,
@@ -310,6 +321,7 @@ class SettingsPage(QWidget):
         self.tabs = QTabWidget()
 
         self.general_tab = QWidget()
+        self.personalization_tab = QWidget()
 
         self.apps_tab = QWidget()
 
@@ -332,6 +344,11 @@ class SettingsPage(QWidget):
         self.tabs.addTab(
             self.general_tab,
             "General",
+        )
+
+        self.tabs.addTab(
+            self.personalization_tab,
+            "Personalization",
         )
 
         self.tabs.addTab(
@@ -388,6 +405,7 @@ class SettingsPage(QWidget):
         # =====================================================
 
         self.build_general_tab()
+        self.build_personalization_tab()
 
         self.build_apps_tab()
 
@@ -549,6 +567,9 @@ class SettingsPage(QWidget):
         layout.addLayout(
             button_row
         )
+    # =========================================================
+    # STARTUP HELPERS
+    # =========================================================
 
     def update_startup_status(
         self
@@ -557,7 +578,6 @@ class SettingsPage(QWidget):
             self.startup_status_label.setText(
                 "Windows startup: Enabled ✓"
             )
-
         else:
             self.startup_status_label.setText(
                 "Windows startup: Disabled"
@@ -569,22 +589,29 @@ class SettingsPage(QWidget):
         settings = {
             "start_with_windows":
                 self.start_with_windows_checkbox.isChecked(),
-
             "start_minimized":
                 self.start_minimized_checkbox.isChecked(),
         }
 
         try:
-            apply_startup_settings(
+            command = apply_startup_settings(
                 settings
             )
 
             self.update_startup_status()
 
+            if settings[
+                "start_with_windows"
+            ]:
+                print(
+                    "JARVIS startup command:",
+                    command
+                )
+
             QMessageBox.information(
                 self,
                 "JARVIS",
-                "Startup settings saved.",
+                "Startup settings saved."
             )
 
         except Exception as error:
@@ -592,8 +619,526 @@ class SettingsPage(QWidget):
                 self,
                 "JARVIS",
                 "Could not update Windows startup.\n\n"
-                f"{error}",
+                f"{error}"
             )
+
+    # =========================================================
+    # PERSONALIZATION
+    # =========================================================
+
+    def build_personalization_tab(
+        self
+    ):
+        layout = QVBoxLayout(
+            self.personalization_tab
+        )
+
+        layout.setContentsMargins(
+            30,
+            30,
+            30,
+            30,
+        )
+
+        title = QLabel(
+            "Assistant Personalization"
+        )
+
+        title.setStyleSheet(
+            "font-size: 20px; "
+            "font-weight: bold;"
+        )
+
+        layout.addWidget(
+            title
+        )
+
+        description = QLabel(
+            "Customize the assistant name, wake model, "
+            "wake phrase label, and spoken responses."
+        )
+
+        description.setWordWrap(
+            True
+        )
+
+        layout.addWidget(
+            description
+        )
+
+        layout.addSpacing(
+            20
+        )
+
+        settings = load_personalization()
+
+        # =====================================================
+        # ASSISTANT NAME
+        # =====================================================
+
+        layout.addWidget(
+            QLabel(
+                "Assistant Name"
+            )
+        )
+
+        self.assistant_name_input = QLineEdit()
+
+        self.assistant_name_input.setText(
+            get_assistant_name()
+        )
+
+        self.assistant_name_input.setPlaceholderText(
+            "JARVIS"
+        )
+
+        layout.addWidget(
+            self.assistant_name_input
+        )
+
+        layout.addSpacing(
+            15
+        )
+
+        # =====================================================
+        # WAKE MODEL
+        # =====================================================
+
+        layout.addWidget(
+            QLabel(
+                "Wake Model"
+            )
+        )
+
+        self.wake_model_combo = QComboBox()
+
+        for model_id, data in WAKE_MODELS.items():
+            self.wake_model_combo.addItem(
+                data.get(
+                    "label",
+                    model_id
+                ),
+                model_id,
+            )
+
+        saved_model = str(
+            settings.get(
+                "wake_model",
+                get_wake_model()
+            )
+        ).strip().lower()
+
+        model_index = self.wake_model_combo.findData(
+            saved_model
+        )
+
+        if model_index >= 0:
+            self.wake_model_combo.setCurrentIndex(
+                model_index
+            )
+
+        self.wake_model_combo.currentIndexChanged.connect(
+            self.update_wake_model_controls
+        )
+
+        layout.addWidget(
+            self.wake_model_combo
+        )
+
+        # =====================================================
+        # WAKE PHRASE LABEL
+        # =====================================================
+
+        layout.addWidget(
+            QLabel(
+                "Wake Phrase Label"
+            )
+        )
+
+        self.wake_phrase_input = QLineEdit()
+
+        self.wake_phrase_input.setText(
+            get_wake_phrase()
+        )
+
+        self.wake_phrase_input.setPlaceholderText(
+            "Hey JARVIS"
+        )
+
+        layout.addWidget(
+            self.wake_phrase_input
+        )
+
+        wake_info = QLabel(
+            "This label changes what JARVIS displays for the wake phrase. "
+            "Changing the actual spoken phrase requires a compatible "
+            "wake-word model."
+        )
+
+        wake_info.setWordWrap(
+            True
+        )
+
+        layout.addWidget(
+            wake_info
+        )
+
+        layout.addSpacing(
+            15
+        )
+
+        # =====================================================
+        # CUSTOM MODEL
+        # =====================================================
+
+        layout.addWidget(
+            QLabel(
+                "Custom Wake Model (.onnx)"
+            )
+        )
+
+        custom_row = QHBoxLayout()
+
+        self.custom_wake_model_input = QLineEdit()
+
+        self.custom_wake_model_input.setText(
+            get_custom_wake_model_path()
+        )
+
+        self.custom_wake_model_input.setPlaceholderText(
+            "Path to a compatible OpenWakeWord .onnx model"
+        )
+
+        custom_row.addWidget(
+            self.custom_wake_model_input,
+            1,
+        )
+
+        self.custom_wake_model_browse = QPushButton(
+            "Browse..."
+        )
+
+        self.custom_wake_model_browse.clicked.connect(
+            self.browse_custom_wake_model
+        )
+
+        custom_row.addWidget(
+            self.custom_wake_model_browse
+        )
+
+        layout.addLayout(
+            custom_row
+        )
+
+        layout.addSpacing(
+            20
+        )
+
+        # =====================================================
+        # PHRASES
+        # =====================================================
+
+        phrase_fields = (
+            (
+                "listening",
+                "Listening Response",
+                "I'm listening.",
+            ),
+            (
+                "one_moment",
+                "Busy Response",
+                "One moment, sir.",
+            ),
+            (
+                "done",
+                "Success Response",
+                "Done, sir.",
+            ),
+            (
+                "sleep",
+                "Sleep Response",
+                "Going back to sleep.",
+            ),
+            (
+                "couldnt_generate",
+                "AI Failure Response",
+                "I couldn't generate the requested content, sir.",
+            ),
+            (
+                "shutdown_cancelled",
+                "Shutdown Cancelled Response",
+                "Shutdown cancelled.",
+            ),
+            (
+                "email_sent",
+                "Email Sent Response",
+                "Email sent, sir.",
+            ),
+            (
+                "email_cancelled",
+                "Email Cancelled Response",
+                "Email cancelled, sir.",
+            ),
+        )
+
+        self.personalization_phrase_inputs = {}
+
+        for key, label_text, placeholder in phrase_fields:
+            layout.addWidget(
+                QLabel(
+                    label_text
+                )
+            )
+
+            field = QLineEdit()
+
+            field.setText(
+                get_phrase(
+                    key
+                )
+            )
+
+            field.setPlaceholderText(
+                placeholder
+            )
+
+            self.personalization_phrase_inputs[key] = field
+
+            layout.addWidget(
+                field
+            )
+
+        layout.addSpacing(
+            15
+        )
+
+        note = QLabel(
+            "Tip: changing the assistant name updates the main UI after restart. "
+            "Built-in wake models are selectable here; custom wake phrases need "
+            "a compatible custom model."
+        )
+
+        note.setWordWrap(
+            True
+        )
+
+        layout.addWidget(
+            note
+        )
+
+        layout.addStretch()
+
+        button_row = QHBoxLayout()
+
+        reset_button = QPushButton(
+            "Reset Defaults"
+        )
+
+        reset_button.clicked.connect(
+            self.reset_personalization_gui
+        )
+
+        button_row.addWidget(
+            reset_button
+        )
+
+        button_row.addStretch()
+
+        save_button = QPushButton(
+            "Save Personalization"
+        )
+
+        save_button.clicked.connect(
+            self.save_personalization_gui
+        )
+
+        button_row.addWidget(
+            save_button
+        )
+
+        layout.addLayout(
+            button_row
+        )
+
+        self.update_wake_model_controls()
+
+    def update_wake_model_controls(
+        self
+    ):
+        model = self.wake_model_combo.currentData()
+
+        is_custom = model == "custom"
+
+        self.custom_wake_model_input.setEnabled(
+            is_custom
+        )
+
+        self.custom_wake_model_browse.setEnabled(
+            is_custom
+        )
+
+        if not is_custom:
+            data = WAKE_MODELS.get(
+                model,
+                {}
+            )
+
+            phrase = str(
+                data.get(
+                    "phrase",
+                    ""
+                )
+            ).strip()
+
+            if phrase:
+                self.wake_phrase_input.setText(
+                    phrase
+                )
+
+    def browse_custom_wake_model(
+        self
+    ):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Choose JARVIS Wake Model",
+            "",
+            "ONNX Models (*.onnx)",
+        )
+
+        if path:
+            self.custom_wake_model_input.setText(
+                path
+            )
+
+    def save_personalization_gui(
+        self
+    ):
+        assistant_name = (
+            self.assistant_name_input
+            .text()
+            .strip()
+        )
+
+        if not assistant_name:
+            QMessageBox.warning(
+                self,
+                "JARVIS",
+                "Enter an assistant name."
+            )
+            return
+
+        model = self.wake_model_combo.currentData()
+
+        custom_model = (
+            self.custom_wake_model_input
+            .text()
+            .strip()
+        )
+
+        if model == "custom":
+            if not custom_model:
+                QMessageBox.warning(
+                    self,
+                    "JARVIS",
+                    "Choose a custom ONNX wake model."
+                )
+                return
+
+            if not os.path.isfile(custom_model):
+                QMessageBox.warning(
+                    self,
+                    "JARVIS",
+                    "That custom wake model file does not exist."
+                )
+                return
+
+        settings = load_personalization()
+
+        settings["assistant_name"] = assistant_name
+        settings["wake_model"] = str(
+            model or "hey_jarvis"
+        )
+        settings["wake_phrase"] = (
+            self.wake_phrase_input.text().strip()
+        )
+        settings["custom_wake_model_path"] = custom_model
+
+        phrases = settings.get(
+            "phrases",
+            {}
+        )
+
+        for key, field in self.personalization_phrase_inputs.items():
+            phrases[key] = field.text().strip()
+
+        settings["phrases"] = phrases
+
+        try:
+            save_personalization(
+                settings
+            )
+
+            QMessageBox.information(
+                self,
+                "JARVIS",
+                "Personalization saved. Restart JARVIS for the UI name change to appear everywhere."
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "JARVIS",
+                "Could not save personalization.\n\n"
+                f"{error}"
+            )
+
+    def reset_personalization_gui(
+        self
+    ):
+        defaults = {
+            "assistant_name": "JARVIS",
+            "wake_model": "hey_jarvis",
+            "wake_phrase": "Hey JARVIS",
+            "custom_wake_model_path": "",
+            "phrases": {
+                "listening": "I'm listening.",
+                "one_moment": "One moment, sir.",
+                "done": "Done, sir.",
+                "sleep": "Going back to sleep.",
+                "couldnt_generate": "I couldn't generate the requested content, sir.",
+                "shutdown_cancelled": "Shutdown cancelled.",
+                "email_sent": "Email sent, sir.",
+                "email_cancelled": "Email cancelled, sir.",
+            },
+        }
+
+        self.assistant_name_input.setText(
+            defaults["assistant_name"]
+        )
+
+        index = self.wake_model_combo.findData(
+            defaults["wake_model"]
+        )
+
+        if index >= 0:
+            self.wake_model_combo.setCurrentIndex(
+                index
+            )
+
+        self.wake_phrase_input.setText(
+            defaults["wake_phrase"]
+        )
+
+        self.custom_wake_model_input.clear()
+
+        for key, value in defaults["phrases"].items():
+            field = self.personalization_phrase_inputs.get(
+                key
+            )
+            if field is not None:
+                field.setText(
+                    value
+                )
 
     # =========================================================
     # APPS
@@ -1026,8 +1571,8 @@ class SettingsPage(QWidget):
         )
 
         description = QLabel(
-            "Choose which Ollama models JARVIS uses "
-            "for Normal Mode and Think Mode."
+            "Choose which Ollama models JARVIS uses for Normal Mode, "
+            "Think Mode, and the dedicated Coding Agent."
         )
 
         description.setWordWrap(
@@ -1133,6 +1678,66 @@ class SettingsPage(QWidget):
         )
 
         # =====================================================
+        # CODING AGENT
+        # =====================================================
+
+        coding_row = QHBoxLayout()
+
+        coding_row.addWidget(
+            QLabel(
+                "Coding Agent Model"
+            )
+        )
+
+        coding_row.addStretch()
+
+        self.coding_model_combo = QComboBox()
+
+        self.coding_model_combo.setEditable(
+            True
+        )
+
+        self.coding_model_combo.addItems(
+            [
+                "qwen2.5-coder:7b",
+                "qwen2.5-coder:3b",
+                "qwen2.5-coder:14b",
+                "deepseek-coder-v2:16b",
+                "codellama:13b",
+            ]
+        )
+
+        self.coding_model_combo.setCurrentText(
+            settings.get(
+                "coding_model",
+                "qwen2.5-coder:7b",
+            )
+        )
+
+        coding_row.addWidget(
+            self.coding_model_combo,
+            2,
+        )
+
+        layout.addLayout(
+            coding_row
+        )
+
+        coding_note = QLabel(
+            "The Coding Agent uses this model for project planning, "
+            "file generation, validation, and automatic repair. "
+            "JARVIS will fall back to an installed coding model when possible."
+        )
+
+        coding_note.setWordWrap(
+            True
+        )
+
+        layout.addWidget(
+            coding_note
+        )
+
+        # =====================================================
         # TEMPERATURE
         # =====================================================
 
@@ -1231,9 +1836,16 @@ class SettingsPage(QWidget):
             .strip()
         )
 
+        coding_model = (
+            self.coding_model_combo
+            .currentText()
+            .strip()
+        )
+
         if (
             not normal_model
             or not think_model
+            or not coding_model
         ):
             QMessageBox.warning(
                 self,
@@ -1250,6 +1862,9 @@ class SettingsPage(QWidget):
 
                 "think_model":
                     think_model,
+
+                "coding_model":
+                    coding_model,
 
                 "temperature":
                     self.temperature_input.value(),
@@ -1271,6 +1886,10 @@ class SettingsPage(QWidget):
 
         self.think_model_combo.setCurrentText(
             "gemma3:4b"
+        )
+
+        self.coding_model_combo.setCurrentText(
+            "qwen2.5-coder:7b"
         )
 
         self.temperature_input.setValue(

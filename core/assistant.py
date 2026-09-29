@@ -15,7 +15,9 @@ from core.ai_mode import (
 )
 
 from core.coding_agent import (
-    create_project_from_response
+    create_project_from_prompt,
+    create_project_from_response,
+    write_script_from_prompt,
 )
 
 from core.contacts_manager import (
@@ -412,64 +414,191 @@ def ask_for_recipient():
 # DESKTOP AGENT
 # =========================================================
 
+def _coding_language_from_request(
+    prompt
+):
+    text = str(prompt or '').lower()
+
+    if 'typescript' in text or ' ts ' in f' {text} ':
+        return 'typescript'
+
+    if 'javascript' in text or 'node.js' in text or 'nodejs' in text:
+        return 'javascript'
+
+    if 'html' in text and 'css' not in text and 'javascript' not in text:
+        return 'html'
+
+    if 'css' in text:
+        return 'css'
+
+    if 'sql' in text:
+        return 'sql'
+
+    if 'powershell' in text or 'power shell' in text:
+        return 'powershell'
+
+    return 'python'
+
+
 def handle_agent_request(
     request
 ):
     global stop_requested
 
     kind = request.get(
-        "kind"
+        'kind'
     )
 
-    if kind == "message":
+    if kind == 'message':
         speak_with_interrupt(
             request.get(
-                "message",
-                "I couldn't complete "
-                "that request, sir."
+                'message',
+                "I couldn't complete that request, sir."
             )
         )
 
         return True
 
 
-    if kind == "literal_paste":
+    if kind == 'literal_paste':
         if paste_text(
             request.get(
-                "text",
-                ""
+                'text',
+                ''
             )
         ):
             speak_with_interrupt(
-                "Done, sir."
+                'Done, sir.'
             )
-
         else:
             speak_with_interrupt(
-                "I couldn't type into "
-                "the active window, sir."
+                "I couldn't type into the active window, sir."
             )
 
         return True
 
 
+    if kind in {
+        'coding_project',
+        'coding_script',
+    }:
+        set_state(
+            'THINKING'
+        )
+
+        speak_with_interrupt(
+            'Coding Agent engaged. One moment, sir.'
+        )
+
+        if stop_requested:
+            stop_requested = False
+            set_state(
+                'LISTENING'
+            )
+            return True
+
+        prompt = str(
+            request.get(
+                'prompt',
+                ''
+            )
+        ).strip()
+
+        try:
+            if kind == 'coding_project':
+                result = create_project_from_prompt(
+                    prompt,
+                    open_project=True,
+                )
+            else:
+                language = _coding_language_from_request(
+                    prompt
+                )
+
+                result = write_script_from_prompt(
+                    prompt,
+                    language=language,
+                )
+
+            print(
+                'Coding Agent model:',
+                getattr(result, 'model', ''),
+            )
+
+            if getattr(result, 'project_dir', ''):
+                print(
+                    'Coding Agent project:',
+                    result.project_dir,
+                )
+
+            if getattr(result, 'files_created', None):
+                print(
+                    'Coding Agent files:',
+                    ', '.join(result.files_created),
+                )
+
+            if getattr(result, 'issues', None):
+                for issue in result.issues:
+                    print(
+                        'Coding Agent issue:',
+                        issue.path,
+                        issue.message,
+                        issue.output,
+                    )
+
+            message = str(
+                getattr(
+                    result,
+                    'message',
+                    'Coding task completed.'
+                )
+            )
+
+            if getattr(result, 'success', False):
+                speak_with_interrupt(
+                    message
+                )
+            else:
+                speak_with_interrupt(
+                    'The Coding Agent finished, but it found a problem. '
+                    + message
+                )
+
+        except Exception as error:
+            print(
+                'Coding Agent error:',
+                repr(error),
+            )
+
+            speak_with_interrupt(
+                'The Coding Agent encountered an error. '
+                f'{error}'
+            )
+
+        set_state(
+            'LISTENING'
+        )
+
+        return True
+
+
     if kind not in {
-        "paste_ai",
-        "speak_ai",
-        "project"
+        'paste_ai',
+        'speak_ai',
+        'project',
     }:
         return False
 
 
     speak_with_interrupt(
-        "One moment, sir."
+        'One moment, sir.'
     )
 
     if stop_requested:
         stop_requested = False
 
         set_state(
-            "LISTENING"
+            'LISTENING'
         )
 
         return True
@@ -477,8 +606,8 @@ def handle_agent_request(
 
     generated = ai_with_interrupt(
         request.get(
-            "prompt",
-            ""
+            'prompt',
+            ''
         )
     )
 
@@ -487,7 +616,7 @@ def handle_agent_request(
         stop_requested = False
 
         set_state(
-            "LISTENING"
+            'LISTENING'
         )
 
         return True
@@ -495,14 +624,13 @@ def handle_agent_request(
 
     if not generated:
         speak_with_interrupt(
-            "I couldn't generate the "
-            "requested content, sir."
+            "I couldn't generate the requested content, sir."
         )
 
         return True
 
 
-    if kind == "speak_ai":
+    if kind == 'speak_ai':
         speak_with_interrupt(
             generated
         )
@@ -510,22 +638,21 @@ def handle_agent_request(
         return True
 
 
-    if kind == "paste_ai":
+    if kind == 'paste_ai':
         if paste_text(
             generated
         ):
             speak_with_interrupt(
                 request.get(
-                    "success_message",
-                    "Done, sir."
+                    'success_message',
+                    'Done, sir.'
                 )
             )
 
         else:
             speak_with_interrupt(
-                "I generated the content, "
-                "but I couldn't paste it "
-                "into the active window, sir."
+                "I generated the content, but I couldn't paste it "
+                'into the active window, sir.'
             )
 
         return True

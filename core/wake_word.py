@@ -1,27 +1,96 @@
-from openwakeword.model import Model
+import os
 
 import numpy as np
 import sounddevice as sd
 
+from openwakeword.model import Model
+
+from core.personalization import (
+    get_custom_wake_model_path,
+    get_wake_model,
+    get_wake_phrase,
+)
+
 
 WAKE_WORD = "hey_jarvis"
+
 DETECTION_THRESHOLD = 0.5
 
 
+def _get_model_spec():
+
+    model = get_wake_model()
+
+    if model == "custom":
+
+        custom_path = (
+            get_custom_wake_model_path()
+        )
+
+        if (
+            custom_path
+            and os.path.isfile(
+                custom_path
+            )
+        ):
+
+            return custom_path
+
+        print(
+            "Custom wake model missing."
+        )
+
+        print(
+            "Falling back to hey_jarvis."
+        )
+
+        return "hey_jarvis"
+
+    return model
+
+
 def wait_for_wake_word():
-    model = Model(
-        wakeword_models=[
-            WAKE_WORD
-        ],
-        inference_framework="onnx"
+
+    model_spec = _get_model_spec()
+
+    wake_phrase = get_wake_phrase()
+
+    print(
+        f"Wake phrase: {wake_phrase}"
     )
 
     print(
-        "Waiting for wake word..."
+        f"Wake model: {model_spec}"
     )
 
-    detected = False
+    try:
 
+        model = Model(
+            wakeword_models=[
+                model_spec
+            ],
+            inference_framework="onnx"
+        )
+
+    except Exception as error:
+
+        print(
+            "Wake model load error:",
+            error
+        )
+
+        print(
+            "Falling back to hey_jarvis."
+        )
+
+        model = Model(
+            wakeword_models=[
+                "hey_jarvis"
+            ],
+            inference_framework="onnx"
+        )
+
+    detected = False
 
     def callback(
         indata,
@@ -32,9 +101,11 @@ def wait_for_wake_word():
         nonlocal detected
 
         if detected:
+
             return
 
         if status:
+
             print(
                 "Wake audio status:",
                 status
@@ -45,22 +116,43 @@ def wait_for_wake_word():
             dtype=np.int16
         )
 
-        prediction = model.predict(
-            audio
+        try:
+
+            prediction = (
+                model.predict(
+                    audio
+                )
+            )
+
+        except Exception as error:
+
+            print(
+                "Wake prediction error:",
+                error
+            )
+
+            return
+
+        if not prediction:
+
+            return
+
+        score = max(
+            float(value)
+            for value in prediction.values()
         )
 
-        score = prediction.get(
-            WAKE_WORD,
-            0
-        )
+        if score >= DETECTION_THRESHOLD:
 
-        if score > DETECTION_THRESHOLD:
             print(
                 "Wake word detected!"
             )
 
-            detected = True
+            print(
+                f"Wake score: {score:.3f}"
+            )
 
+            detected = True
 
     with sd.InputStream(
         samplerate=16000,
@@ -69,7 +161,9 @@ def wait_for_wake_word():
         blocksize=1280,
         callback=callback
     ):
+
         while not detected:
+
             sd.sleep(
                 100
             )

@@ -11,7 +11,8 @@ AI_SETTINGS_FILE = user_file(
 DEFAULT_AI_SETTINGS = {
     "normal_model": "qwen2.5:1.5b",
     "think_model": "gemma3:4b",
-    "temperature": 0.7
+    "coding_model": "qwen2.5-coder:7b",
+    "temperature": 0.7,
 }
 
 
@@ -35,26 +36,28 @@ def load_ai_settings():
             )
 
         return {
-            "normal_model": saved.get(
-                "normal_model",
-                DEFAULT_AI_SETTINGS[
-                    "normal_model"
-                ]
-            ),
-
-            "think_model": saved.get(
-                "think_model",
-                DEFAULT_AI_SETTINGS[
-                    "think_model"
-                ]
-            ),
-
+            "normal_model": str(
+                saved.get(
+                    "normal_model",
+                    DEFAULT_AI_SETTINGS["normal_model"]
+                )
+            ).strip() or DEFAULT_AI_SETTINGS["normal_model"],
+            "think_model": str(
+                saved.get(
+                    "think_model",
+                    DEFAULT_AI_SETTINGS["think_model"]
+                )
+            ).strip() or DEFAULT_AI_SETTINGS["think_model"],
+            "coding_model": str(
+                saved.get(
+                    "coding_model",
+                    DEFAULT_AI_SETTINGS["coding_model"]
+                )
+            ).strip() or DEFAULT_AI_SETTINGS["coding_model"],
             "temperature": saved.get(
                 "temperature",
-                DEFAULT_AI_SETTINGS[
-                    "temperature"
-                ]
-            )
+                DEFAULT_AI_SETTINGS["temperature"]
+            ),
         }
 
     except Exception as error:
@@ -67,6 +70,40 @@ def load_ai_settings():
 
 
 def save_ai_settings(settings):
+    incoming = settings if isinstance(settings, dict) else {}
+    current = load_ai_settings()
+
+    merged = {
+        "normal_model": str(
+            incoming.get(
+                "normal_model",
+                current["normal_model"]
+            )
+        ).strip() or DEFAULT_AI_SETTINGS["normal_model"],
+        "think_model": str(
+            incoming.get(
+                "think_model",
+                current["think_model"]
+            )
+        ).strip() or DEFAULT_AI_SETTINGS["think_model"],
+        "coding_model": str(
+            incoming.get(
+                "coding_model",
+                current.get(
+                    "coding_model",
+                    DEFAULT_AI_SETTINGS["coding_model"]
+                )
+            )
+        ).strip() or DEFAULT_AI_SETTINGS["coding_model"],
+        "temperature": incoming.get(
+            "temperature",
+            current.get(
+                "temperature",
+                DEFAULT_AI_SETTINGS["temperature"]
+            )
+        ),
+    }
+
     os.makedirs(
         os.path.dirname(
             AI_SETTINGS_FILE
@@ -80,7 +117,7 @@ def save_ai_settings(settings):
         encoding="utf-8"
     ) as file:
         json.dump(
-            settings,
+            merged,
             file,
             indent=4
         )
@@ -89,11 +126,10 @@ def save_ai_settings(settings):
 def set_ai_mode(mode):
     global _current_mode
 
-    mode = mode.lower().strip()
+    mode = str(mode).lower().strip()
 
     if mode == "think":
         _current_mode = "think"
-
     else:
         _current_mode = "normal"
 
@@ -113,13 +149,17 @@ def get_current_model():
     settings = load_ai_settings()
 
     if _current_mode == "think":
-        return settings[
-            "think_model"
-        ]
+        return settings["think_model"]
 
-    return settings[
-        "normal_model"
-    ]
+    return settings["normal_model"]
+
+
+def get_coding_model():
+    settings = load_ai_settings()
+    return settings.get(
+        "coding_model",
+        DEFAULT_AI_SETTINGS["coding_model"]
+    )
 
 
 def get_temperature():
@@ -127,10 +167,7 @@ def get_temperature():
 
     try:
         return float(
-            settings[
-                "temperature"
-            ]
+            settings["temperature"]
         )
-
     except Exception:
         return 0.7
