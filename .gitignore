@@ -44,3 +44,4 @@ piper/*.onnx
 
 # Local exported conversation artifacts
 piper/*Architecture Milestone*
+.env
